@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SurgeAI – AI-Powered Trend Surge Analyzer</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-dark">
+  <div class="container">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+      <span class="surge-logo">⚡</span>
+      <span class="brand-text">SurgeAI</span>
+    </a>
+    <span class="badge bg-secondary">VandyHacks XII</span>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero-section text-center">
+  <div class="container">
+    <div class="hero-badge mb-3">⚡ Powered by AI</div>
+    <h1 class="hero-title">Detect What's <span class="text-gradient">Surging</span></h1>
+    <p class="hero-subtitle">
+      Paste any news article, social post, or text. SurgeAI instantly scores
+      the surge intensity, sentiment, and key themes — so you're always ahead
+      of the trend.
+    </p>
+  </div>
+</section>
+
+<!-- Analyzer Card -->
+<section class="analyzer-section">
+  <div class="container">
+    <div class="analyzer-card">
+
+      <div class="mb-3">
+        <label for="inputText" class="form-label fw-semibold">Paste your content here</label>
+        <textarea
+          id="inputText"
+          class="form-control surge-textarea"
+          rows="7"
+          placeholder="e.g. 'Breaking: Bitcoin surges past $100k in overnight trading, smashing records amid unprecedented institutional demand…'"
+        ></textarea>
+        <div class="d-flex justify-content-between mt-1">
+          <small class="text-muted" id="charCount">0 characters</small>
+          <small class="text-muted">Min 20 characters</small>
+        </div>
+      </div>
+
+      <!-- Sample buttons -->
+      <div class="mb-3 d-flex flex-wrap gap-2">
+        <span class="text-muted small me-1 align-self-center">Try a sample:</span>
+        <button class="btn btn-sm btn-outline-secondary sample-btn" data-sample="tech">🚀 Tech Breakthrough</button>
+        <button class="btn btn-sm btn-outline-secondary sample-btn" data-sample="crypto">₿ Crypto Rally</button>
+        <button class="btn btn-sm btn-outline-secondary sample-btn" data-sample="crisis">⚠️ Market Crisis</button>
+      </div>
+
+      <button id="analyzeBtn" class="btn btn-surge w-100 py-3 fw-bold fs-5">
+        <span id="btnText">⚡ Analyze Surge</span>
+        <span id="btnSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
+      </button>
+
+      <div id="errorMsg" class="alert alert-danger mt-3 d-none"></div>
+    </div>
+
+    <!-- Results -->
+    <div id="results" class="d-none mt-4">
+
+      <!-- Surge Score -->
+      <div class="result-card text-center mb-4">
+        <p class="result-label">Surge Score</p>
+        <div class="score-circle mx-auto mb-2" id="scoreCircle">
+          <span id="scoreValue">0</span>
+        </div>
+        <div id="surgeLevel" class="surge-level-badge mt-2"></div>
+
+        <!-- Score bar -->
+        <div class="score-bar-wrap mt-4">
+          <div class="score-bar-track">
+            <div class="score-bar-fill" id="scoreBar" style="width:0%"></div>
+          </div>
+          <div class="d-flex justify-content-between score-bar-labels">
+            <span>Low</span><span>Moderate</span><span>High</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary -->
+      <div class="result-card mb-4">
+        <p class="result-label">AI Summary</p>
+        <p id="summaryText" class="summary-text"></p>
+        <small id="aiLabel" class="text-muted d-block mt-2"></small>
+      </div>
+
+      <!-- Stats row -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-4">
+          <div class="stat-card">
+            <div class="stat-icon">💬</div>
+            <div class="stat-value" id="wordCount">—</div>
+            <div class="stat-label">Words Analyzed</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="stat-card">
+            <div class="stat-icon" id="sentimentIcon">—</div>
+            <div class="stat-value" id="sentimentValue">—</div>
+            <div class="stat-label">Sentiment</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="stat-card">
+            <div class="stat-icon">⚡</div>
+            <div class="stat-value" id="urgencyCount">—</div>
+            <div class="stat-label">Urgency Signals</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Keywords -->
+      <div class="result-card mb-4">
+        <p class="result-label">Top Keywords</p>
+        <div id="keywordCloud" class="keyword-cloud"></div>
+      </div>
+
+      <!-- Signal breakdown -->
+      <div class="result-card mb-4">
+        <p class="result-label">Signal Breakdown</p>
+        <div id="signalBreakdown"></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="text-center py-4 text-muted small">
+  Built with ❤️ for <strong>VandyHacks XII</strong> &nbsp;·&nbsp; SurgeAI
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
