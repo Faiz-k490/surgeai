@@ -1,0 +1,23 @@
+# Virtual environment
+venv/
+.venv/
+
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# IDE and AI
+.vscode/
+.idea/
+.cursorrules
+.aierules
+
+# Runtime logs (see logging/README.md)
+logging/logs/*.log
+

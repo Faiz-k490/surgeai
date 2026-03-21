@@ -1,0 +1,11 @@
+# SurgeonAI Frontend - AI Generation Rules
+
+1. TECH STACK: React 18, Vite, Tailwind CSS.
+2. STATE MANAGEMENT: EXCLUSIVELY use `zustand`. NO Context API. NO Redux.
+3. STYLING (Anti-Gravity Aesthetic): 
+   - Floating panels using `absolute` positioning.
+   - Glassmorphism backgrounds: `bg-black/60 backdrop-blur-md`.
+   - Sharp, glowing borders using Tailwind ring/border utilities.
+   - High contrast text (`text-green-400`, `text-red-500`, `text-white`).
+4. ANIMATION: Use `framer-motion` for all entrance/exit animations.
+5. ARCHITECTURE: The background video stream (`<img src="http://localhost:5000/video" />`) MUST be completely isolated from Zustand state so it NEVER re-renders.

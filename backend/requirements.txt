@@ -1,11 +1,13 @@
 flask
 flask-socketio
+colorlog
 opencv-python
 python-dotenv
-google-generativeai
+google-genai
 groq
 elevenlabs
 SpeechRecognition
 pymongo
 snowflake-connector-python
-pyttsx3
+pydantic
+pyaudio

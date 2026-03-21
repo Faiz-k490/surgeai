@@ -1,4 +1,7 @@
-from app.logic.step_tracker import StepTracker
+try:
+    from backend.app.logic.step_tracker import StepTracker
+except ModuleNotFoundError:
+    from app.logic.step_tracker import StepTracker
 
 
 def test_step_tracker_progression():

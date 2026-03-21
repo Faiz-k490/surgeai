@@ -2,6 +2,8 @@
 
 This backend currently targets Python `3.11` for reliable dependency compatibility.
 
+**Full stack (Loop A + Loop B + HUD + VLM):** see [`../docs/RUN_FULL_STACK.md`](../docs/RUN_FULL_STACK.md).
+
 ## 1) Create and activate virtual environment
 
 ```powershell
@@ -27,7 +29,8 @@ Open `.env` and fill all `replace_me` values:
 Frontend integration config:
 - `FRONTEND_ORIGIN` (default `http://localhost:5173`)
 - `SOCKET_NAMESPACE` (default `/realtime`)
-- `PORT` (default `5000`)
+- `PORT` (default `5000` — must match `VITE_API_BASE` in `surgeon-hud/.env`)
+- `GEMINI_MODEL`, `VLM_MAX_HZ`, `CAPTURE_TARGET_FPS`, `LOOP_B_ENABLED` (see runbook)
 
 ## 3) Run backend
 
@@ -37,11 +40,17 @@ From the repo root:
 .\.venv311\Scripts\python -m backend.app.main
 ```
 
+## Logging
+
+Backend writes **`../logging/logs/surgeai-backend.log`** and prints colored lines to the terminal. Set **`LOG_LEVEL`** in `.env`. See **`../logging/README.md`**.
+
 ## 4) Smoke-check endpoints
 
-- Health: [http://localhost:5000/health](http://localhost:5000/health)
-- Session state: [http://localhost:5000/session/state](http://localhost:5000/session/state)
-- Video stream: [http://localhost:5000/video](http://localhost:5000/video)
+(Default `PORT` is **5000** — match `surgeon-hud` `VITE_API_BASE`.)
+
+- Health: `http://localhost:5000/health`
+- Session state: `http://localhost:5000/session/state`
+- Video stream: `http://localhost:5000/video`
 
 ## 5) Frontend teammate integration
 
