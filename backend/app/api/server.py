@@ -3,7 +3,10 @@ from typing import Callable
 from flask import Flask, Response, jsonify
 from flask_socketio import SocketIO
 
-from app.contracts.http import health_payload, session_state_payload
+try:
+    from backend.app.contracts.http import health_payload, session_state_payload
+except ModuleNotFoundError:
+    from app.contracts.http import health_payload, session_state_payload
 
 
 def create_app(frontend_origin: str) -> Flask:
