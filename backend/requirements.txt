@@ -3,8 +3,7 @@ flask-socketio
 colorlog
 opencv-python
 python-dotenv
-google-genai
-groq
+ultralytics
 elevenlabs
 SpeechRecognition
 pymongo

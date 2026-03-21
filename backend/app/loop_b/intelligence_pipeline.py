@@ -2,7 +2,7 @@
 intelligence_pipeline.py — RAG retrieval + LLM generation for SurgeAI.
 
 1. Retrieves relevant surgical-protocol context from Snowflake Cortex Search.
-2. Sends the context + question to Groq (Llama 3.3 70B) for a grounded answer.
+2. Sends the context + question to Snowflake Cortex COMPLETE() for a grounded answer.
 """
 
 import logging
@@ -10,15 +10,11 @@ import os
 from typing import Optional
 
 import snowflake.connector
-from groq import Groq
 from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger("surgeai.intelligence")
 
-# ── Constants ────────────────────────────────────────────────────────────────
-
-GROQ_MODEL = "llama-3.3-70b-versatile"
-GROQ_TIMEOUT = 30  # seconds
+CORTEX_MODEL = os.getenv("CORTEX_MODEL", "mistral-large")
 
 SYSTEM_PROMPT = (
     "You are a senior surgical attending providing rapid, precise guidance to "
@@ -28,8 +24,6 @@ SYSTEM_PROMPT = (
     "Keep your response concise—ideally under 100 words—so it can be read "
     "aloud quickly during a procedure."
 )
-
-# ── Pydantic models ──────────────────────────────────────────────────────────
 
 
 class QuestionInput(BaseModel):
@@ -52,11 +46,8 @@ class PipelineResult(BaseModel):
     question: str
     context_chunks: list[str] = Field(default_factory=list)
     answer: str
-    model: str = GROQ_MODEL
+    model: str = CORTEX_MODEL
     error: Optional[str] = None
-
-
-# ── Snowflake RAG retrieval ──────────────────────────────────────────────────
 
 
 def _get_snowflake_connection() -> snowflake.connector.SnowflakeConnection:
@@ -80,8 +71,6 @@ def retrieve_context(question: str, top_k: int = 3) -> list[str]:
     Query Snowflake Cortex Search for the most relevant surgical-protocol
     paragraphs.  Returns up to `top_k` text chunks.
     """
-    # The CORTEX.SEARCH function is called as a Snowflake SQL function.
-    # It performs semantic (vector) search over the indexed service.
     query = """
         SELECT results
         FROM TABLE(
@@ -101,7 +90,6 @@ def retrieve_context(question: str, top_k: int = 3) -> list[str]:
             cur = conn.cursor()
             cur.execute(query, {"question": question, "top_k": top_k})
             for row in cur.fetchall():
-                # Each row's first column contains the matched text chunk
                 if row and row[0]:
                     chunks.append(str(row[0]))
         finally:
@@ -113,9 +101,6 @@ def retrieve_context(question: str, top_k: int = 3) -> list[str]:
 
     logger.info("Retrieved %d context chunk(s) from Snowflake.", len(chunks))
     return chunks
-
-
-# ── Groq LLM generation ─────────────────────────────────────────────────────
 
 
 def _build_user_prompt(question: str, context_chunks: list[str]) -> str:
@@ -135,29 +120,32 @@ def _build_user_prompt(question: str, context_chunks: list[str]) -> str:
 
 def generate_answer(question: str, context_chunks: list[str]) -> str:
     """
-    Send the context-augmented prompt to Groq (Llama 3.3 70B) and return
-    the generated clinical answer.
+    Send the context-augmented prompt to Snowflake Cortex COMPLETE() and
+    return the generated clinical answer.
     """
-    client = Groq(api_key=os.environ["GROQ_API_KEY"], timeout=GROQ_TIMEOUT)
-
     user_prompt = _build_user_prompt(question, context_chunks)
+    full_prompt = f"{SYSTEM_PROMPT}\n\n{user_prompt}"
 
-    chat_completion = client.chat.completions.create(
-        model=GROQ_MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.3,
-        max_tokens=512,
-    )
+    try:
+        conn = _get_snowflake_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT SNOWFLAKE.CORTEX.COMPLETE(%s, %s)",
+                (CORTEX_MODEL, full_prompt),
+            )
+            row = cur.fetchone()
+            cur.close()
+            if row and row[0]:
+                answer = str(row[0]).strip()
+                logger.info("Cortex generation complete (%s).", CORTEX_MODEL)
+                return answer
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.error("Cortex COMPLETE() failed in Loop B: %s", exc)
 
-    answer = chat_completion.choices[0].message.content
-    logger.info("Groq generation complete (%s).", GROQ_MODEL)
-    return answer or ""
-
-
-# ── Public entry point ───────────────────────────────────────────────────────
+    return "I'm unable to generate an answer right now. Please try again."
 
 
 async def run_pipeline(raw_question: str) -> PipelineResult:
@@ -166,10 +154,9 @@ async def run_pipeline(raw_question: str) -> PipelineResult:
 
     1. Validate the incoming question via Pydantic.
     2. Retrieve context from Snowflake Cortex Search.
-    3. Generate an answer with Groq.
+    3. Generate an answer with Snowflake Cortex COMPLETE().
     4. Return a structured PipelineResult.
     """
-    # ── Validate ──
     try:
         validated = QuestionInput(question=raw_question)
     except Exception as exc:
@@ -182,14 +169,12 @@ async def run_pipeline(raw_question: str) -> PipelineResult:
 
     question = validated.question
 
-    # ── Retrieve ──
     try:
         context_chunks = retrieve_context(question)
     except Exception as exc:
         logger.error("Context retrieval error: %s", exc)
         context_chunks = []
 
-    # ── Generate ──
     try:
         answer = generate_answer(question, context_chunks)
     except Exception as exc:

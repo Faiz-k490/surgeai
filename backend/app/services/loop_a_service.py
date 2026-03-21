@@ -1,5 +1,6 @@
 """
-Loop A + Loop B orchestration: camera, VLM, guidance, Socket.IO, optional voice Q&A.
+Loop A + Loop B orchestration: camera, YOLO detection, state machine, Cortex
+guidance, Socket.IO, optional voice Q&A.
 
 Canonical Loop B modules: `backend.app.loop_b`.
 """
@@ -23,20 +24,13 @@ try:
     from backend.app.audio.tts import GuidanceSpeaker
     from backend.app.config import load_settings
     from backend.app.contracts.events import make_event
-    from backend.app.llm.groq_client import GroqGuidanceClient
+    from backend.app.llm.cortex_client import CortexGuidanceClient
     from backend.app.logic.step_tracker import StepTracker
-    from backend.app.rag.snowflake_client import SnowflakeRAGClient
     from backend.app.state import SharedState
     from backend.app.storage.mongo_logger import MongoEventLogger
     from backend.app.vision.camera import open_camera
-    from backend.app.vision.color_detection import detect_demo_colors
     from backend.app.vision.frame_encoding import LatestFrameBuffer, encode_jpeg, sleep_until_next_frame
-    from backend.app.vision.gemini_client import (
-        SURGEAI_GEMINI_BACKOFF_KEY,
-        SURGEAI_SKIP_LLM_RAG_KEY,
-        GeminiVisionClient,
-        strip_internal_gemini_keys,
-    )
+    from backend.app.vision.yolo_detector import YoloDetector
 except ModuleNotFoundError:
     from app.api.flask_factory import (
         create_app,
@@ -47,20 +41,13 @@ except ModuleNotFoundError:
     from app.audio.tts import GuidanceSpeaker
     from app.config import load_settings
     from app.contracts.events import make_event
-    from app.llm.groq_client import GroqGuidanceClient
+    from app.llm.cortex_client import CortexGuidanceClient
     from app.logic.step_tracker import StepTracker
-    from app.rag.snowflake_client import SnowflakeRAGClient
     from app.state import SharedState
     from app.storage.mongo_logger import MongoEventLogger
     from app.vision.camera import open_camera
-    from app.vision.color_detection import detect_demo_colors
     from app.vision.frame_encoding import LatestFrameBuffer, encode_jpeg, sleep_until_next_frame
-    from app.vision.gemini_client import (
-        SURGEAI_GEMINI_BACKOFF_KEY,
-        SURGEAI_SKIP_LLM_RAG_KEY,
-        GeminiVisionClient,
-        strip_internal_gemini_keys,
-    )
+    from app.vision.yolo_detector import YoloDetector
 
 _LOOP_B_MODULES_OK = False
 try:
@@ -70,9 +57,6 @@ try:
 
     _LOOP_B_MODULES_OK = True
 except ModuleNotFoundError as exc:
-    # Only fall back to `app.loop_b` when the *top-level* package is `backend`
-    # (e.g. `python -m app.main` from `backend/`). Do not retry on missing optional
-    # deps like `speech_recognition` — that would incorrectly import `app` from repo root.
     if getattr(exc, "name", None) == "backend":
         try:
             from app.loop_b.audio_pipeline import _build_recognizer_and_mic, _capture_question, _listen_for_wake_word
@@ -96,19 +80,20 @@ class LoopAService:
         self.cap = open_camera(self.settings.brio_camera_index, self.settings.camera_backend)
         self.frame_buffer = LatestFrameBuffer()
         self.mongo_logger = MongoEventLogger(self.settings)
-        self.gemini_client = GeminiVisionClient(self.settings)
-        self.snowflake_client = SnowflakeRAGClient(self.settings)
-        self.groq_client = GroqGuidanceClient(self.settings)
+        self.yolo = YoloDetector(
+            model_path=self.settings.yolo_model,
+            confidence=self.settings.yolo_confidence_threshold,
+        )
+        self.cortex_client = CortexGuidanceClient(self.settings)
         self.speaker = GuidanceSpeaker(self.settings)
         self.running = True
         self._last_guidance_spoken = 0.0
         self._last_vlm_ts = 0.0
-        self._gemini_backoff_until = 0.0
+        self._prev_step_number = 0
         self.deps: Dict[str, bool] = {
             "camera": True,
-            "gemini": True,
-            "snowflake": True,
-            "groq": True,
+            "yolo": True,
+            "cortex": True,
             "elevenlabs": True,
             "mongo": True,
             "loop_b": _LOOP_B_MODULES_OK and self.settings.loop_b_enabled,
@@ -119,9 +104,8 @@ class LoopAService:
         register_socketio_namespace_handlers(self.socketio, self.settings.socket_namespace)
         register_routes(self.app, self.state.snapshot, self.mjpeg_stream, self.deps_snapshot)
         self.deps["mongo"] = self.mongo_logger.ping()
-        self.deps["gemini"] = self.gemini_client.ping()
-        self.deps["snowflake"] = self.snowflake_client.ping()
-        self.deps["groq"] = self.groq_client.ping()
+        self.deps["yolo"] = self.yolo.ping()
+        self.deps["cortex"] = self.cortex_client.ping()
         self.deps["elevenlabs"] = self.speaker.ping()
         if not _LOOP_B_MODULES_OK:
             self.deps["loop_b"] = False
@@ -210,7 +194,7 @@ class LoopAService:
             sleep_until_next_frame(t0, self.settings.capture_target_fps)
 
     def run_vlm_loop(self) -> None:
-        """Throttled Gemini + step tracker + RAG + Groq + TTS (Loop A)."""
+        """YOLO detection + step tracker + Cortex guidance + TTS (Loop A)."""
         min_ivl = self._vlm_min_interval_seconds()
         while self.running:
             pair = self.frame_buffer.get()
@@ -219,71 +203,73 @@ class LoopAService:
                 continue
             frame_bytes, frame = pair
             now = time.time()
-            if now < self._gemini_backoff_until:
-                time.sleep(min(0.05, max(0.0, self._gemini_backoff_until - now)))
-                continue
             if now - self._last_vlm_ts < min_ivl:
                 time.sleep(0.02)
                 continue
             self._last_vlm_ts = now
             t_infer = time.time()
 
-            scene = detect_demo_colors(frame)
-            gemini_data = self.gemini_client.analyze_scene(frame_bytes, scene)
+            # --- YOLO local detection (fast, no API) ---
+            yolo_result = self.yolo.detect(frame)
+            objects = yolo_result.get("objects", [])
+            ar_boxes = yolo_result.get("ar_boxes", [])
 
-            backoff_sec = gemini_data.pop(SURGEAI_GEMINI_BACKOFF_KEY, None)
-            skip_llm_rag = bool(gemini_data.pop(SURGEAI_SKIP_LLM_RAG_KEY, False))
-            if backoff_sec is not None:
-                self._gemini_backoff_until = time.time() + float(backoff_sec)
+            # --- State machine evaluation ---
+            step_number, step_name, warning = self.tracker.advance(objects)
+            step_changed = step_number != self._prev_step_number
+            self._prev_step_number = step_number
 
-            step_number, step_name, warning = self.tracker.advance(scene)
-            combined_warning = warning or str(gemini_data.get("warning", "")).strip()
+            # --- Cortex guidance (only on state changes or warnings) ---
+            guidance = ""
+            event_type = ""
+            if step_changed:
+                event_type = "step_update"
+            elif warning:
+                event_type = "warning"
 
-            if skip_llm_rag:
-                rag = {"context": "", "source": None}
-                guidance = (
-                    combined_warning
-                    or str(gemini_data.get("instruction") or "").strip()
-                    or "Guidance paused — Gemini rate limited or unavailable."
-                )
-            else:
-                rag = self.snowflake_client.fetch_context(str(scene), step_name)
-                guidance = self.groq_client.generate_guidance(str(scene), rag["context"], step_name)
-                if combined_warning:
-                    guidance = combined_warning
+            if event_type:
+                detected_tool = objects[0]["display_label"] if objects else "none"
+                try:
+                    guidance = self.cortex_client.generate_guidance(step_name, detected_tool, event_type)
+                except Exception as exc:
+                    logger.error("Cortex guidance failed: %s", exc)
+                    from backend.app.logic.step_tracker import FALLBACK_GUIDANCE  # noqa: F811
+                    guidance = FALLBACK_GUIDANCE.get(step_number, f"Continue with {step_name}.")
+            elif warning:
+                guidance = warning
 
-            if not skip_llm_rag and (
+            # --- TTS (only on new events, deduplicated in GuidanceSpeaker) ---
+            if guidance and (
                 now - self._last_guidance_spoken >= self.settings.guidance_min_interval_seconds
             ):
                 self.speaker.speak(guidance)
                 self._last_guidance_spoken = now
 
             latency_ms = int(max(0.0, (time.time() - t_infer) * 1000))
-            gemini_for_log = strip_internal_gemini_keys(gemini_data)
+            labels_summary = ", ".join(f"{o['display_label']}({o['confidence']})" for o in objects) or "none"
             self.state.update(
                 current_step=step_number,
                 current_step_name=step_name,
-                current_warning=combined_warning or None,
-                last_guidance=guidance,
-                last_scene_summary=str({"hsv_scene": scene, "gemini": gemini_for_log}),
+                current_warning=warning or None,
+                last_guidance=guidance or self.state.last_guidance,
+                last_scene_summary=f"YOLO: [{labels_summary}]",
                 loop_a_alive=True,
                 metrics_latency_ms=latency_ms,
             )
-            self.emit_step_event(step_number, step_name, combined_warning)
-            self.emit_vlm_overlay(gemini_data.get("ar_boxes") or [])
+            self.emit_step_event(step_number, step_name, warning)
+            self.emit_vlm_overlay(ar_boxes)
 
-            self.mongo_logger.log_event(
-                "loop_a_step",
-                {
-                    "step_number": step_number,
-                    "step_name": step_name,
-                    "warning": combined_warning,
-                    "scene": scene,
-                    "gemini": gemini_for_log,
-                    "rag_source": rag.get("source"),
-                    "guidance": guidance,
-                },
-            )
+            if event_type:
+                self.mongo_logger.log_event(
+                    "loop_a_step",
+                    {
+                        "step_number": step_number,
+                        "step_name": step_name,
+                        "warning": warning,
+                        "objects": objects,
+                        "guidance": guidance,
+                    },
+                )
 
             health_event = make_event(
                 event_version=self.settings.event_schema_version,
@@ -293,13 +279,13 @@ class LoopAService:
                     "fps": round(self.state.metrics_fps, 1),
                     "latency": latency_ms,
                     "apiLatencyMs": latency_ms,
-                    "degraded": not self.deps.get("gemini", True),
+                    "degraded": not self.deps.get("cortex", True),
                 },
             )
             self.socketio.emit("system_health", health_event, namespace=self.settings.socket_namespace)
 
     def _on_loop_b_question(self, question_text: str) -> None:
-        """RAG → Groq → Socket `qa_update` → ElevenLabs TTS → Mongo (Loop B)."""
+        """RAG -> Cortex -> Socket `qa_update` -> ElevenLabs TTS -> Mongo (Loop B)."""
         logger.info("[Loop B] Question: %s", question_text)
         try:
             chunks = retrieve_context(question_text)
@@ -344,12 +330,19 @@ class LoopAService:
         if not self.deps.get("loop_b"):
             logger.info("Loop B disabled or modules missing — skipping audio thread.")
             return
+        retries = 0
         while self.running:
             try:
                 recognizer, mic = _build_recognizer_and_mic()
                 break
             except Exception as exc:
-                logger.error("[Loop B] Mic init failed (%s) — retry in 5s", exc)
+                retries += 1
+                if retries <= 3:
+                    logger.error("[Loop B] Mic init failed (%s) — retry in 5s", exc)
+                elif retries == 4:
+                    logger.error("[Loop B] Mic init failed after %d attempts. Giving up.", retries)
+                    self.deps["loop_b"] = False
+                    return
                 time.sleep(5)
 
         logger.info("Loop B listening — say 'Hey Surgeon' then your question.")

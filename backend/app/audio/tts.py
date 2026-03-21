@@ -32,11 +32,7 @@ class GuidanceSpeaker:
         def _run() -> None:
             self._speaking = True
             try:
-                try:
-                    from backend.app.loop_b.tts_pipeline import speak as elevenlabs_speak
-                except ModuleNotFoundError:
-                    from app.loop_b.tts_pipeline import speak as elevenlabs_speak
-
+                from backend.app.loop_b.tts_pipeline import speak as elevenlabs_speak
                 elevenlabs_speak(text)
             except Exception as exc:
                 logger.error("Loop A ElevenLabs TTS failed: %s", exc)
