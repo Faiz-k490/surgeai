@@ -1,0 +1,11 @@
+flask
+flask-socketio
+opencv-python
+python-dotenv
+google-generativeai
+groq
+elevenlabs
+SpeechRecognition
+pymongo
+snowflake-connector-python
+pyttsx3
