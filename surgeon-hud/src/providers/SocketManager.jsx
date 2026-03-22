@@ -9,18 +9,11 @@ function unwrap(data) {
 }
 
 export default function SocketManager({ children }) {
-  const setStep = useHudStore((state) => state.setStep);
-  const setWarning = useHudStore((state) => state.setWarning);
-  const clearWarning = useHudStore((state) => state.clearWarning);
-  const setQA = useHudStore((state) => state.setQA);
-  const setMetrics = useHudStore((state) => state.setMetrics);
-  const setIsConnected = useHudStore((state) => state.setIsConnected);
-  const setARBoxes = useHudStore((state) => state.setARBoxes);
+  const setIsConnected = useHudStore((s) => s.setIsConnected);
+  const setMetrics = useHudStore((s) => s.setMetrics);
+  const applyFrameState = useHudStore((s) => s.applyFrameState);
 
   useEffect(() => {
-    // Polling only: Werkzeug + Flask-SocketIO (threading) often breaks WebSocket upgrade
-    // with "Invalid frame header". Long-polling is reliable for this HUD. For native WS,
-    // run behind an ASGI server or use async_mode=eventlet/gevent on the backend.
     const socket = io(getSocketUrl(), {
       path: '/socket.io',
       transports: ['polling'],
@@ -39,37 +32,20 @@ export default function SocketManager({ children }) {
       log.warn(`Socket.IO disconnected — ${reason}`);
     });
     socket.on('connect_error', (err) => {
-      log.bad(
-        `Socket.IO connect_error — match VITE_API_BASE to backend PORT & check backend is running: ${err?.message || err}`,
-      );
+      log.bad(`Socket.IO connect_error: ${err?.message || err}`);
     });
 
-    socket.on('step_update', (raw) => {
-      const data = unwrap(raw);
-      setStep(`Step ${data.stepNumber}: ${data.stepName}`);
+    // Unified frame_state from DemoOrchestrator
+    socket.on('frame_state', (raw) => {
+      applyFrameState(unwrap(raw));
     });
-    socket.on('warning', (raw) => {
-      const data = unwrap(raw);
-      setWarning(data.message);
-    });
-    socket.on('clear', () => clearWarning());
-    socket.on('qa_update', (raw) => {
-      const data = unwrap(raw);
-      setQA(data);
-      // Auto-clear QA after 10 seconds
-      setTimeout(() => setQA(null), 10000);
-    });
+
     socket.on('system_health', (raw) => {
-      const data = unwrap(raw);
-      setMetrics(data);
-    });
-    socket.on('vlm_update', (raw) => {
-      const data = unwrap(raw);
-      setARBoxes(data.boxes || []);
+      setMetrics(unwrap(raw));
     });
 
     return () => socket.disconnect();
-  }, [setStep, setWarning, clearWarning, setQA, setMetrics, setIsConnected, setARBoxes]);
+  }, [setIsConnected, setMetrics, applyFrameState]);
 
   return <>{children}</>;
 }

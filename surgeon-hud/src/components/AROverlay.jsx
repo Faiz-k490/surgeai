@@ -1,98 +1,144 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useHudStore } from '../store/useHudStore';
 
-function TargetBracket({ box }) {
-  const style = {
-    left: `${box.x * 100}%`,
-    top: `${box.y * 100}%`,
-    width: `${box.width * 100}%`,
-    height: `${box.height * 100}%`,
-  };
+/**
+ * SVG-based AR overlay — pointer-events-none, z-10.
+ * Reads ar_elements from backend and renders:
+ *   - "box"     → targeting brackets with dynamic color
+ *   - "polygon" → red incision zone outline
+ *   - "line"    → scalpel-to-target trace line with deviation color
+ */
 
-  const cornerSize = '12px';
-  const borderWidth = '2px';
-  const color = box.color || 'rgb(34, 211, 238)';
+export default function AROverlay() {
+  const arElements = useHudStore((s) => s.arElements);
+  const phase = useHudStore((s) => s.phase);
+
+  // Don't render anything in Phase 0 (clean video only)
+  if (phase === 0) return null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="absolute"
-      style={style}
-    >
-      {/* Top-left corner */}
-      <div
-        className="absolute top-0 left-0"
-        style={{
-          width: cornerSize,
-          height: cornerSize,
-          borderTop: `${borderWidth} solid ${color}`,
-          borderLeft: `${borderWidth} solid ${color}`,
-        }}
-      />
-      {/* Top-right corner */}
-      <div
-        className="absolute top-0 right-0"
-        style={{
-          width: cornerSize,
-          height: cornerSize,
-          borderTop: `${borderWidth} solid ${color}`,
-          borderRight: `${borderWidth} solid ${color}`,
-        }}
-      />
-      {/* Bottom-left corner */}
-      <div
-        className="absolute bottom-0 left-0"
-        style={{
-          width: cornerSize,
-          height: cornerSize,
-          borderBottom: `${borderWidth} solid ${color}`,
-          borderLeft: `${borderWidth} solid ${color}`,
-        }}
-      />
-      {/* Bottom-right corner */}
-      <div
-        className="absolute bottom-0 right-0"
-        style={{
-          width: cornerSize,
-          height: cornerSize,
-          borderBottom: `${borderWidth} solid ${color}`,
-          borderRight: `${borderWidth} solid ${color}`,
-        }}
-      />
+    <div className="absolute inset-0 pointer-events-none z-10">
+      <svg
+        viewBox="0 0 1 1"
+        preserveAspectRatio="none"
+        className="absolute inset-0 w-full h-full"
+        style={{ overflow: 'visible' }}
+      >
+        <defs>
+          {/* Glow filter for lines */}
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="0.003" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
 
-      {/* Label */}
-      {box.label && (
-        <div
-          className="absolute -top-5 left-0 px-1.5 py-0.5 text-[10px] font-mono tracking-wider uppercase"
-          style={{
-            color,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            borderLeft: `${borderWidth} solid ${color}`,
-          }}
-        >
-          {box.label}
-          {box.confidence != null && (
-            <span className="ml-1.5 opacity-50">{Math.round(box.confidence * 100)}%</span>
-          )}
-        </div>
-      )}
-    </motion.div>
+        <AnimatePresence>
+          {arElements.map((el, i) => {
+            if (el.type === 'box') return <BoxBracket key={`box-${i}`} el={el} />;
+            if (el.type === 'polygon') return <PolygonOutline key={`poly-${i}`} el={el} />;
+            if (el.type === 'line') return <TraceLine key={`line-${i}`} el={el} />;
+            return null;
+          })}
+        </AnimatePresence>
+      </svg>
+
+      {/* HTML labels (outside SVG for better text rendering) */}
+      <AnimatePresence>
+        {arElements
+          .filter((el) => el.type === 'box' && el.label)
+          .map((el, i) => (
+            <BoxLabel key={`label-${i}`} el={el} />
+          ))}
+      </AnimatePresence>
+    </div>
   );
 }
 
-export default function AROverlay() {
-  const arBoxes = useHudStore((s) => s.arBoxes);
+
+// ── Box Bracket (SVG corner brackets) ──────────────────────────────────────
+function BoxBracket({ el }) {
+  const { x, y, width, height, color } = el;
+  const cs = 0.015; // corner size in normalized coords
+  const sw = 0.002; // stroke width
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-20">
-      <AnimatePresence>
-        {arBoxes.map((box, i) => (
-          <TargetBracket key={box.id || i} box={box} />
-        ))}
-      </AnimatePresence>
-    </div>
+    <g opacity="0.9">
+      {/* Top-left */}
+      <line x1={x} y1={y} x2={x + cs} y2={y} stroke={color} strokeWidth={sw} />
+      <line x1={x} y1={y} x2={x} y2={y + cs} stroke={color} strokeWidth={sw} />
+      {/* Top-right */}
+      <line x1={x + width} y1={y} x2={x + width - cs} y2={y} stroke={color} strokeWidth={sw} />
+      <line x1={x + width} y1={y} x2={x + width} y2={y + cs} stroke={color} strokeWidth={sw} />
+      {/* Bottom-left */}
+      <line x1={x} y1={y + height} x2={x + cs} y2={y + height} stroke={color} strokeWidth={sw} />
+      <line x1={x} y1={y + height} x2={x} y2={y + height - cs} stroke={color} strokeWidth={sw} />
+      {/* Bottom-right */}
+      <line x1={x + width} y1={y + height} x2={x + width - cs} y2={y + height} stroke={color} strokeWidth={sw} />
+      <line x1={x + width} y1={y + height} x2={x + width} y2={y + height - cs} stroke={color} strokeWidth={sw} />
+    </g>
+  );
+}
+
+
+// ── Polygon Outline (incision zone) ────────────────────────────────────────
+function PolygonOutline({ el }) {
+  if (!el.points || el.points.length < 3) return null;
+  const pts = el.points.map((p) => `${p[0]},${p[1]}`).join(' ');
+  return (
+    <polygon
+      points={pts}
+      fill="none"
+      stroke={el.color}
+      strokeWidth="0.003"
+      strokeDasharray="0.01 0.005"
+      opacity="0.7"
+      filter="url(#glow)"
+    />
+  );
+}
+
+
+// ── Trace Line (scalpel → target) ──────────────────────────────────────────
+function TraceLine({ el }) {
+  return (
+    <line
+      x1={el.x1} y1={el.y1}
+      x2={el.x2} y2={el.y2}
+      stroke={el.color}
+      strokeWidth="0.004"
+      strokeLinecap="round"
+      filter="url(#glow)"
+      opacity="0.85"
+    />
+  );
+}
+
+
+// ── HTML Label (floating above box) ────────────────────────────────────────
+function BoxLabel({ el }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+      className="absolute text-[10px] font-mono tracking-widest uppercase px-1.5 py-0.5"
+      style={{
+        left: `${el.x * 100}%`,
+        top: `calc(${el.y * 100}% - 20px)`,
+        color: el.color,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        borderLeft: `2px solid ${el.color}`,
+        textShadow: `0 0 6px ${el.color}`,
+      }}
+    >
+      {el.label}
+      {el.confidence != null && (
+        <span className="ml-1 opacity-40">{Math.round(el.confidence * 100)}%</span>
+      )}
+    </motion.div>
   );
 }

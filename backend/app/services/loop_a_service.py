@@ -162,13 +162,16 @@ class LoopAService:
             )
             self.socketio.emit("clear", clear_event, namespace=self.settings.socket_namespace)
 
-    def emit_vlm_overlay(self, boxes: Any) -> None:
+    def emit_vlm_overlay(self, boxes: Any, telemetry: Any = None) -> None:
         if not isinstance(boxes, list):
             boxes = []
+        payload: Dict[str, Any] = {"boxes": boxes}
+        if telemetry is not None:
+            payload["telemetry"] = telemetry
         evt = make_event(
             event_version=self.settings.event_schema_version,
             event_type="vlm_update",
-            payload={"boxes": boxes},
+            payload=payload,
         )
         self.socketio.emit("vlm_update", evt, namespace=self.settings.socket_namespace)
 
@@ -211,8 +214,19 @@ class LoopAService:
 
             # --- YOLO local detection (fast, no API) ---
             yolo_result = self.yolo.detect(frame)
-            objects = yolo_result.get("objects", [])
-            ar_boxes = yolo_result.get("ar_boxes", [])
+            ar_boxes = yolo_result.get("boxes", [])
+            telemetry = yolo_result.get("telemetry", None)
+            # Build legacy objects list from ar_boxes for step tracker
+            objects = [
+                {
+                    "label": b.get("label", ""),
+                    "display_label": b.get("label", ""),
+                    "confidence": b.get("confidence", 0),
+                    "x": b.get("x", 0),
+                    "y": b.get("y", 0),
+                }
+                for b in ar_boxes
+            ]
 
             # --- State machine evaluation ---
             step_number, step_name, warning = self.tracker.advance(objects)
@@ -257,7 +271,7 @@ class LoopAService:
                 metrics_latency_ms=latency_ms,
             )
             self.emit_step_event(step_number, step_name, warning)
-            self.emit_vlm_overlay(ar_boxes)
+            self.emit_vlm_overlay(ar_boxes, telemetry)
 
             if event_type:
                 self.mongo_logger.log_event(
