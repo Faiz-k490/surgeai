@@ -2,7 +2,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 import { useHudStore } from './store/useHudStore';
 import SocketManager from './providers/SocketManager';
-import BootScreen from './components/BootScreen';
 import VideoBackground from './components/VideoBackground';
 import SystemHealth from './components/SystemHealth';
 import AROverlay from './components/AROverlay';
@@ -121,10 +120,10 @@ function WarningBanner() {
 
 // ── Phase 5: Surgery Complete ──────────────────────────────────────────────
 function SurgeryComplete() {
-  const phase = useHudStore((s) => s.phase);
+  const surgicalStep = useHudStore((s) => s.surgicalStep);
   const arElements = useHudStore((s) => s.arElements);
 
-  const showOverlay = phase === 5 && arElements.some((el) => el.type === 'success_overlay');
+  const showOverlay = surgicalStep === 'complete' || arElements.some((el) => el.type === 'success_overlay');
   if (!showOverlay) return null;
 
   return (
@@ -190,11 +189,32 @@ function SurgeryComplete() {
   );
 }
 
+function GuidanceRibbon() {
+  const nextStepHint = useHudStore((s) => s.nextStepHint);
+  const surgicalStep = useHudStore((s) => s.surgicalStep);
+  const transcriptPreview = useHudStore((s) => s.transcriptPreview);
+
+  return (
+    <div className="absolute left-0 right-0 bottom-8 z-20 flex justify-center px-4 pointer-events-none">
+      <div className="max-w-3xl rounded-2xl border border-white/10 bg-black/55 px-5 py-3 backdrop-blur-xl">
+        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-cyan-300/75">
+          {surgicalStep.replaceAll('_', ' ')}
+        </p>
+        <p className="mt-1 text-sm text-white/85">{nextStepHint}</p>
+        {transcriptPreview ? (
+          <p className="mt-2 text-xs font-mono text-white/35">Last heard: {transcriptPreview}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 
 // ── App ────────────────────────────────────────────────────────────────────
 function App() {
   const isBooted = useHudStore((s) => s.isBooted);
   const setBooted = useHudStore((s) => s.setBooted);
+  const requestActivation = useHudStore((s) => s.requestActivation);
   const [showLanding, setShowLanding] = useState(true);
 
   return (
@@ -205,6 +225,7 @@ function App() {
           <LandingPage onEnter={() => {
             setShowLanding(false);
             setBooted(true);
+            requestActivation();
           }} />
         )}
       </AnimatePresence>
@@ -244,6 +265,9 @@ function App() {
 
                   {/* Z-40: Voice Pill (Dynamic Island, TOP) */}
                   <VoicePill />
+
+                  {/* Z-45: Guidance Ribbon */}
+                  <GuidanceRibbon />
 
                   {/* Z-50: Surgery Complete */}
                   <SurgeryComplete />

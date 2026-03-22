@@ -25,7 +25,7 @@ export default function VideoBackground() {
             Requested <code className="text-gray-300">{src}</code>. Start the backend, set{' '}
             <code className="text-gray-300">VITE_API_BASE</code> to the same host/port as{' '}
             <code className="text-gray-300">PORT</code>, and ensure the camera opens (see{' '}
-            <code className="text-gray-300">CAMERA_BACKEND</code> on Windows).
+            <code className="text-gray-300">CAMERA_INDEX</code> on Windows).
           </p>
         </div>
       )}
