@@ -182,6 +182,12 @@ class SmartCropper:
         self._ema_cy: Optional[float] = None
         self._ema_side: Optional[float] = None
 
+        # Lock-in state (patience)
+        self._last_target_cx: Optional[float] = None
+        self._last_target_cy: Optional[float] = None
+        self._last_target_side: Optional[float] = None
+        self._missed_frames: int = 0
+
         # Overlay state — updated every crop, read by run_capture for HUD drawing
         self._overlay_box: Optional[Tuple[int, int, int, int]] = None  # x1,y1,x2,y2
         self._overlay_label: str = ""
@@ -217,7 +223,24 @@ class SmartCropper:
         yolo_boxes: Optional[List[Dict[str, Any]]],
     ) -> bytes:
         fh, fw = frame.shape[:2]
-        raw_cx, raw_cy, raw_side = _extract_best_box(fh, fw, yolo_boxes or [])
+        
+        if yolo_boxes:
+            raw_cx, raw_cy, raw_side = _extract_best_box(fh, fw, yolo_boxes)
+            self._last_target_cx = raw_cx
+            self._last_target_cy = raw_cy
+            self._last_target_side = raw_side
+            self._missed_frames = 0
+        else:
+            self._missed_frames += 1
+            if self._missed_frames < 60 and self._last_target_cx is not None:
+                # Keep tracking the last known target for 2 seconds (60 frames at 30 fps)
+                raw_cx = self._last_target_cx
+                raw_cy = self._last_target_cy
+                raw_side = self._last_target_side
+            else:
+                # Zoom completely out, target center of screen
+                raw_cx, raw_cy, raw_side = _extract_best_box(fh, fw, [])
+                
         s_cx, s_cy, s_side = self._ema_update(raw_cx, raw_cy, raw_side)
 
         crop = _zoom_crop(frame, s_cx, s_cy, s_side)

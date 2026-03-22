@@ -117,14 +117,10 @@ def open_camera(index: int, backend: str = "auto") -> cv2.VideoCapture:
             logger.warning("Could not auto-detect external webcam — falling back to index 0")
             index = 0
     else:
-        # Even with a specified index, try to find external camera first
-        detected = _find_external_camera_index()
-        if detected is not None and detected != index:
-            logger.info(
-                "External webcam detected at index %d (overriding configured index %d)",
-                detected, index,
-            )
-            index = detected
+        # Trust the explicitly configured index — PnP enumeration order
+        # does NOT match OpenCV index order on Windows, so we never
+        # override a positive index that was set intentionally.
+        logger.info("Using configured camera index %d", index)
 
     b = (backend or "auto").strip().lower()
     candidates: list[tuple[Optional[int], str]] = []

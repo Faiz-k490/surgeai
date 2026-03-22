@@ -12,6 +12,7 @@ import time
 import logging
 import threading
 import numpy as np
+import argparse
 from flask import Flask, Response, jsonify
 from flask_socketio import SocketIO, emit
 
@@ -23,6 +24,9 @@ except ImportError:
     YOLO_AVAILABLE = False
 
 from backend.app.vision.smart_crop import SmartCropper
+from backend.app.vision.gemini_client import GeminiVisionClient
+from backend.app.core.settings import load_settings
+from backend.app.loop_b.tts_pipeline import speak
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("surgeai.demo")
@@ -312,13 +316,15 @@ latest_frame = None
 latest_frame_lock = threading.Lock()
 
 # ── Smart crop state (shared between vision_loop and MJPEG generator) ─────────
-cropper = SmartCropper(jpeg_quality=80)
+cropper = SmartCropper(jpeg_quality=80, ema_alpha=0.08)
+cropper_lock = threading.Lock()
 latest_yolo_boxes: list = []
 latest_yolo_boxes_lock = threading.Lock()
 
 
-def open_camera():
-    for idx in range(5):
+def open_camera(target_idx=None):
+    indices = [target_idx] if target_idx is not None else range(5)
+    for idx in indices:
         cap = cv2.VideoCapture(idx)
         if cap.isOpened():
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
@@ -327,17 +333,17 @@ def open_camera():
             logger.info("Opened camera index %d", idx)
             return cap
         cap.release()
-    logger.error("No camera found on indices 0-4")
+    logger.error("No camera found on indices %s", list(indices))
     return None
 
 
-def capture_thread():
+def capture_thread(target_idx=None):
     """High-FPS capture thread — feeds MJPEG and frame buffer."""
     global camera, latest_frame
     while True:
         with camera_lock:
             if camera is None or not camera.isOpened():
-                camera = open_camera()
+                camera = open_camera(target_idx)
             cap = camera
         if cap is None:
             time.sleep(1)
@@ -366,7 +372,8 @@ def generate_mjpeg():
         with latest_yolo_boxes_lock:
             boxes = list(latest_yolo_boxes)
         try:
-            jpeg = cropper.detect_and_crop(frame, boxes)
+            with cropper_lock:
+                jpeg = cropper.detect_and_crop(frame, boxes)
         except Exception:
             _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
             jpeg = buf.tobytes()
@@ -489,18 +496,77 @@ def vision_loop():
             time.sleep(0.066 - elapsed)
 
 
+# ── Narrator Thread (Gemini 2.0 Flash) ──────────────────────────────────────
+
+def narrator_thread(model_override=None):
+    """Gemini 1 FPS narrator for testing purposes."""
+    import sys
+    if sys.platform == "win32":
+        import pythoncom
+        pythoncom.CoInitialize()
+
+    settings = load_settings()
+    if model_override:
+        settings.gemini_model = model_override
+        
+    client = GeminiVisionClient(settings)
+    if not client.ping():
+        logger.error("[Narrator] Gemini client failed to initialize. Check GEMINI_API_KEY.")
+        return
+
+    logger.info("[Narrator] Narrator thread started (1 frame / 10s) using %s", client.model)
+    while True:
+        time.sleep(10.0)
+        
+        with latest_frame_lock:
+            frame = latest_frame
+        
+        if frame is None:
+            continue
+            
+        with latest_yolo_boxes_lock:
+            boxes = list(latest_yolo_boxes)
+            
+        try:
+            with cropper_lock:
+                jpeg = cropper.detect_and_crop(frame, boxes)
+            narration = client.narrate_scene(jpeg)
+            logger.info("[Narrator] %s", narration)
+            speak(narration)  # Play the text to speech audio synchronously
+        except Exception as e:
+            logger.warning("[Narrator] Error: %s", e)
+
 # ── Main ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="SurgeonAI Demo Backend")
+    parser.add_argument("--narrate", action="store_true", help="Enable 1 FPS Gemini VLM narrator")
+    parser.add_argument("--camera", type=int, default=None, help="Specific camera index to use")
+    parser.add_argument("--model", type=str, default=None, help="Gemini model to use for narrator (default: from .env)")
+    parser.add_argument("--list-cameras", action="store_true", help="List available cameras and exit")
+    args = parser.parse_args()
+
+    if args.list_cameras:
+        print("Scanning for available cameras...")
+        for i in range(10):
+            cap = cv2.VideoCapture(i)
+            if cap.isOpened():
+                print(f"[{i}] Camera found")
+                cap.release()
+        print("Done.")
+        import sys
+        sys.exit(0)
+
     print(f"{'=' * 55}")
     print(f"  SurgeonAI Demo Backend")
     print(f"  Video:     http://localhost:{PORT}/video")
     print(f"  Health:    http://localhost:{PORT}/health")
     print(f"  Socket.IO: http://localhost:{PORT}{NAMESPACE}")
     print(f"  YOLO:      {'✅ Loaded' if YOLO_AVAILABLE else '❌ Not installed'}")
+    print(f"  Model:     {args.model or 'default from .env'}")
     print(f"{'=' * 55}")
 
-    cam = open_camera()
+    cam = open_camera(args.camera)
     if cam:
         camera = cam
         logger.info(
@@ -511,7 +577,10 @@ if __name__ == "__main__":
     else:
         logger.warning("No camera detected. Plug in webcam and restart.")
 
-    threading.Thread(target=capture_thread, daemon=True).start()
+    threading.Thread(target=capture_thread, args=(args.camera,), daemon=True).start()
     threading.Thread(target=vision_loop, daemon=True).start()
+    
+    if args.narrate:
+        threading.Thread(target=narrator_thread, args=(args.model,), daemon=True).start()
 
     socketio.run(app, host="0.0.0.0", port=PORT, debug=False, log_output=False)

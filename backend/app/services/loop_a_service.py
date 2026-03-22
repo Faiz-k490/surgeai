@@ -1,6 +1,5 @@
 """
-Loop A + Loop B orchestration: camera, YOLO detection, state machine, Cortex
-guidance, Socket.IO, optional voice Q&A.
+Loop A + Loop B orchestration: camera, VLM, guidance, Socket.IO, optional voice Q&A.
 
 Canonical Loop B modules: `backend.app.loop_b`.
 """
@@ -11,6 +10,8 @@ import logging
 import time
 from threading import Thread
 from typing import Any, Dict, Optional
+
+import cv2
 
 logger = logging.getLogger("surgeai.backend")
 
@@ -24,13 +25,21 @@ try:
     from backend.app.audio.tts import GuidanceSpeaker
     from backend.app.config import load_settings
     from backend.app.contracts.events import make_event
-    from backend.app.llm.cortex_client import CortexGuidanceClient
+    from backend.app.llm.groq_client import GroqGuidanceClient
     from backend.app.logic.step_tracker import StepTracker
+    from backend.app.rag.snowflake_client import SnowflakeRAGClient
     from backend.app.state import SharedState
     from backend.app.storage.mongo_logger import MongoEventLogger
     from backend.app.vision.camera import open_camera
+    from backend.app.vision.color_detection import detect_demo_colors
     from backend.app.vision.frame_encoding import LatestFrameBuffer, encode_jpeg, sleep_until_next_frame
-    from backend.app.vision.yolo_detector import YoloDetector
+    from backend.app.vision.smart_crop import SmartCropper
+    from backend.app.vision.gemini_client import (
+        SURGEAI_GEMINI_BACKOFF_KEY,
+        SURGEAI_SKIP_LLM_RAG_KEY,
+        GeminiVisionClient,
+        strip_internal_gemini_keys,
+    )
 except ModuleNotFoundError:
     from app.api.flask_factory import (
         create_app,
@@ -41,13 +50,21 @@ except ModuleNotFoundError:
     from app.audio.tts import GuidanceSpeaker
     from app.config import load_settings
     from app.contracts.events import make_event
-    from app.llm.cortex_client import CortexGuidanceClient
+    from app.llm.groq_client import GroqGuidanceClient
     from app.logic.step_tracker import StepTracker
+    from app.rag.snowflake_client import SnowflakeRAGClient
     from app.state import SharedState
     from app.storage.mongo_logger import MongoEventLogger
     from app.vision.camera import open_camera
+    from app.vision.color_detection import detect_demo_colors
     from app.vision.frame_encoding import LatestFrameBuffer, encode_jpeg, sleep_until_next_frame
-    from app.vision.yolo_detector import YoloDetector
+    from app.vision.smart_crop import SmartCropper
+    from app.vision.gemini_client import (
+        SURGEAI_GEMINI_BACKOFF_KEY,
+        SURGEAI_SKIP_LLM_RAG_KEY,
+        GeminiVisionClient,
+        strip_internal_gemini_keys,
+    )
 
 _LOOP_B_MODULES_OK = False
 try:
@@ -57,6 +74,9 @@ try:
 
     _LOOP_B_MODULES_OK = True
 except ModuleNotFoundError as exc:
+    # Only fall back to `app.loop_b` when the *top-level* package is `backend`
+    # (e.g. `python -m app.main` from `backend/`). Do not retry on missing optional
+    # deps like `speech_recognition` — that would incorrectly import `app` from repo root.
     if getattr(exc, "name", None) == "backend":
         try:
             from app.loop_b.audio_pipeline import _build_recognizer_and_mic, _capture_question, _listen_for_wake_word
@@ -80,20 +100,21 @@ class LoopAService:
         self.cap = open_camera(self.settings.brio_camera_index, self.settings.camera_backend)
         self.frame_buffer = LatestFrameBuffer()
         self.mongo_logger = MongoEventLogger(self.settings)
-        self.yolo = YoloDetector(
-            model_path=self.settings.yolo_model,
-            confidence=self.settings.yolo_confidence_threshold,
-        )
-        self.cortex_client = CortexGuidanceClient(self.settings)
+        self.gemini_client = GeminiVisionClient(self.settings)
+        self.snowflake_client = SnowflakeRAGClient(self.settings)
+        self.groq_client = GroqGuidanceClient(self.settings)
         self.speaker = GuidanceSpeaker(self.settings)
         self.running = True
         self._last_guidance_spoken = 0.0
         self._last_vlm_ts = 0.0
-        self._prev_step_number = 0
+        self._gemini_backoff_until = 0.0
+        self._last_gemini_boxes: list = []
+        self.cropper = SmartCropper(jpeg_quality=self.settings.vlm_jpeg_quality)
         self.deps: Dict[str, bool] = {
             "camera": True,
-            "yolo": True,
-            "cortex": True,
+            "gemini": True,
+            "snowflake": True,
+            "groq": True,
             "elevenlabs": True,
             "mongo": True,
             "loop_b": _LOOP_B_MODULES_OK and self.settings.loop_b_enabled,
@@ -104,8 +125,9 @@ class LoopAService:
         register_socketio_namespace_handlers(self.socketio, self.settings.socket_namespace)
         register_routes(self.app, self.state.snapshot, self.mjpeg_stream, self.deps_snapshot)
         self.deps["mongo"] = self.mongo_logger.ping()
-        self.deps["yolo"] = self.yolo.ping()
-        self.deps["cortex"] = self.cortex_client.ping()
+        self.deps["gemini"] = self.gemini_client.ping()
+        self.deps["snowflake"] = self.snowflake_client.ping()
+        self.deps["groq"] = self.groq_client.ping()
         self.deps["elevenlabs"] = self.speaker.ping()
         if not _LOOP_B_MODULES_OK:
             self.deps["loop_b"] = False
@@ -162,16 +184,13 @@ class LoopAService:
             )
             self.socketio.emit("clear", clear_event, namespace=self.settings.socket_namespace)
 
-    def emit_vlm_overlay(self, boxes: Any, telemetry: Any = None) -> None:
+    def emit_vlm_overlay(self, boxes: Any) -> None:
         if not isinstance(boxes, list):
             boxes = []
-        payload: Dict[str, Any] = {"boxes": boxes}
-        if telemetry is not None:
-            payload["telemetry"] = telemetry
         evt = make_event(
             event_version=self.settings.event_schema_version,
             event_type="vlm_update",
-            payload=payload,
+            payload={"boxes": boxes},
         )
         self.socketio.emit("vlm_update", evt, namespace=self.settings.socket_namespace)
 
@@ -186,9 +205,23 @@ class LoopAService:
                 time.sleep(0.05)
                 continue
             self.deps["camera"] = True
-            enc_ok, jpeg = encode_jpeg(frame, self.settings.vlm_jpeg_quality)
+            # Draw the SmartCropper zoom box on a copy of the frame for the MJPEG stream.
+            # The VLM buffer gets the clean frame; the viewer sees the annotated one.
+            overlay = self.cropper.get_overlay()
+            if overlay is not None:
+                (x1, y1, x2, y2), label = overlay
+                display = frame.copy()
+                cv2.rectangle(display, (x1, y1), (x2, y2), (0, 255, 100), 2)
+                if label:
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    (tw, th), baseline = cv2.getTextSize(label, font, 0.65, 2)
+                    cv2.rectangle(display, (x1, y1 - th - baseline - 6), (x1 + tw + 8, y1), (0, 255, 100), -1)
+                    cv2.putText(display, label, (x1 + 4, y1 - baseline - 2), font, 0.65, (0, 0, 0), 2, cv2.LINE_AA)
+            else:
+                display = frame
+            enc_ok, jpeg = encode_jpeg(display, self.settings.vlm_jpeg_quality)
             if enc_ok:
-                self.frame_buffer.put(jpeg, frame)
+                self.frame_buffer.put(jpeg, frame)  # VLM gets the clean frame
                 self.state.update(last_frame_jpeg=jpeg, loop_a_alive=True)
                 dt = max(1e-6, time.time() - t0)
                 inst_fps = 1.0 / dt
@@ -197,7 +230,7 @@ class LoopAService:
             sleep_until_next_frame(t0, self.settings.capture_target_fps)
 
     def run_vlm_loop(self) -> None:
-        """YOLO detection + step tracker + Cortex guidance + TTS (Loop A)."""
+        """Throttled Gemini + step tracker + RAG + Groq + TTS (Loop A)."""
         min_ivl = self._vlm_min_interval_seconds()
         while self.running:
             pair = self.frame_buffer.get()
@@ -206,84 +239,97 @@ class LoopAService:
                 continue
             frame_bytes, frame = pair
             now = time.time()
+            if now < self._gemini_backoff_until:
+                time.sleep(min(0.05, max(0.0, self._gemini_backoff_until - now)))
+                continue
             if now - self._last_vlm_ts < min_ivl:
                 time.sleep(0.02)
                 continue
             self._last_vlm_ts = now
             t_infer = time.time()
 
-            # --- YOLO local detection (fast, no API) ---
-            yolo_result = self.yolo.detect(frame)
-            ar_boxes = yolo_result.get("boxes", [])
-            telemetry = yolo_result.get("telemetry", None)
-            # Build legacy objects list from ar_boxes for step tracker
-            objects = [
-                {
-                    "label": b.get("label", ""),
-                    "display_label": b.get("label", ""),
-                    "confidence": b.get("confidence", 0),
-                    "x": b.get("x", 0),
-                    "y": b.get("y", 0),
-                }
-                for b in ar_boxes
-            ]
+            scene = detect_demo_colors(frame)
+            # Dynamic-zoom smart crop: use previous frame's boxes to tightly
+            # frame the subject, then upscale to 512x512 for the VLM.
+            try:
+                vlm_frame_bytes = self.cropper.detect_and_crop(frame, self._last_gemini_boxes)
+            except Exception as _crop_err:
+                logger.warning("Smart crop failed (%s) — sending full frame", _crop_err)
+                vlm_frame_bytes = frame_bytes
+            gemini_data = self.gemini_client.analyze_scene(vlm_frame_bytes, scene)
 
-            # --- State machine evaluation ---
+            backoff_sec = gemini_data.pop(SURGEAI_GEMINI_BACKOFF_KEY, None)
+            skip_llm_rag = bool(gemini_data.pop(SURGEAI_SKIP_LLM_RAG_KEY, False))
+            if backoff_sec is not None:
+                self._gemini_backoff_until = time.time() + float(backoff_sec)
+
+            # Build detection list from Gemini ar_boxes for the step tracker.
+            # Gemini uses tool names like "scalpel"; map to COCO labels the
+            # tracker's state machine expects ("knife", "scissors", "banana").
+            _GEMINI_TO_COCO = {
+                "scalpel": "knife", "knife": "knife",
+                "clamp": "scissors", "scissors": "scissors", "forceps": "scissors",
+                "banana": "banana", "patient": "banana", "tissue": "banana",
+            }
+            gemini_boxes = gemini_data.get("ar_boxes", [])
+            # Cache boxes for the next frame's smart crop
+            if isinstance(gemini_boxes, list) and gemini_boxes:
+                self._last_gemini_boxes = gemini_boxes
+            objects = []
+            for b in gemini_boxes if isinstance(gemini_boxes, list) else []:
+                raw = str(b.get("label", "")).lower() if isinstance(b, dict) else ""
+                coco = _GEMINI_TO_COCO.get(raw, raw)
+                conf = float(b.get("confidence", gemini_data.get("confidence", 0.7)) if isinstance(b, dict) else 0.0)
+                if coco:
+                    objects.append({"label": coco, "confidence": conf})
             step_number, step_name, warning = self.tracker.advance(objects)
-            step_changed = step_number != self._prev_step_number
-            self._prev_step_number = step_number
+            combined_warning = warning or str(gemini_data.get("warning", "")).strip()
 
-            # --- Cortex guidance (only on state changes or warnings) ---
-            guidance = ""
-            event_type = ""
-            if step_changed:
-                event_type = "step_update"
-            elif warning:
-                event_type = "warning"
+            if skip_llm_rag:
+                rag = {"context": "", "source": None}
+                guidance = (
+                    combined_warning
+                    or str(gemini_data.get("instruction") or "").strip()
+                    or "Guidance paused — Gemini rate limited or unavailable."
+                )
+            else:
+                rag = self.snowflake_client.fetch_context(str(scene), step_name)
+                guidance = self.groq_client.generate_guidance(str(scene), rag["context"], step_name)
+                if combined_warning:
+                    guidance = combined_warning
 
-            if event_type:
-                detected_tool = objects[0]["display_label"] if objects else "none"
-                try:
-                    guidance = self.cortex_client.generate_guidance(step_name, detected_tool, event_type)
-                except Exception as exc:
-                    logger.error("Cortex guidance failed: %s", exc)
-                    from backend.app.logic.step_tracker import FALLBACK_GUIDANCE  # noqa: F811
-                    guidance = FALLBACK_GUIDANCE.get(step_number, f"Continue with {step_name}.")
-            elif warning:
-                guidance = warning
-
-            # --- TTS (only on new events, deduplicated in GuidanceSpeaker) ---
-            if guidance and (
+            if not skip_llm_rag and (
                 now - self._last_guidance_spoken >= self.settings.guidance_min_interval_seconds
             ):
                 self.speaker.speak(guidance)
                 self._last_guidance_spoken = now
 
             latency_ms = int(max(0.0, (time.time() - t_infer) * 1000))
-            labels_summary = ", ".join(f"{o['display_label']}({o['confidence']})" for o in objects) or "none"
+            gemini_for_log = strip_internal_gemini_keys(gemini_data)
             self.state.update(
                 current_step=step_number,
                 current_step_name=step_name,
-                current_warning=warning or None,
-                last_guidance=guidance or self.state.last_guidance,
-                last_scene_summary=f"YOLO: [{labels_summary}]",
+                current_warning=combined_warning or None,
+                last_guidance=guidance,
+                last_scene_summary=str({"hsv_scene": scene, "gemini": gemini_for_log}),
                 loop_a_alive=True,
                 metrics_latency_ms=latency_ms,
             )
-            self.emit_step_event(step_number, step_name, warning)
-            self.emit_vlm_overlay(ar_boxes, telemetry)
+            self.emit_step_event(step_number, step_name, combined_warning)
+            self.emit_vlm_overlay(gemini_data.get("ar_boxes") or [])
 
-            if event_type:
-                self.mongo_logger.log_event(
-                    "loop_a_step",
-                    {
-                        "step_number": step_number,
-                        "step_name": step_name,
-                        "warning": warning,
-                        "objects": objects,
-                        "guidance": guidance,
-                    },
-                )
+            self.mongo_logger.log_event(
+                "loop_a_step",
+                {
+                    "step_number": step_number,
+                    "step_name": step_name,
+                    "warning": combined_warning,
+                    "scene": scene,
+                    "gemini": gemini_for_log,
+                    "rag_source": rag.get("source"),
+                    "guidance": guidance,
+                },
+            )
 
             health_event = make_event(
                 event_version=self.settings.event_schema_version,
@@ -293,13 +339,13 @@ class LoopAService:
                     "fps": round(self.state.metrics_fps, 1),
                     "latency": latency_ms,
                     "apiLatencyMs": latency_ms,
-                    "degraded": not self.deps.get("cortex", True),
+                    "degraded": not self.deps.get("gemini", True),
                 },
             )
             self.socketio.emit("system_health", health_event, namespace=self.settings.socket_namespace)
 
     def _on_loop_b_question(self, question_text: str) -> None:
-        """RAG -> Cortex -> Socket `qa_update` -> ElevenLabs TTS -> Mongo (Loop B)."""
+        """RAG → Groq → Socket `qa_update` → ElevenLabs TTS → Mongo (Loop B)."""
         logger.info("[Loop B] Question: %s", question_text)
         try:
             chunks = retrieve_context(question_text)
@@ -344,19 +390,12 @@ class LoopAService:
         if not self.deps.get("loop_b"):
             logger.info("Loop B disabled or modules missing — skipping audio thread.")
             return
-        retries = 0
         while self.running:
             try:
                 recognizer, mic = _build_recognizer_and_mic()
                 break
             except Exception as exc:
-                retries += 1
-                if retries <= 3:
-                    logger.error("[Loop B] Mic init failed (%s) — retry in 5s", exc)
-                elif retries == 4:
-                    logger.error("[Loop B] Mic init failed after %d attempts. Giving up.", retries)
-                    self.deps["loop_b"] = False
-                    return
+                logger.error("[Loop B] Mic init failed (%s) — retry in 5s", exc)
                 time.sleep(5)
 
         logger.info("Loop B listening — say 'Hey Surgeon' then your question.")

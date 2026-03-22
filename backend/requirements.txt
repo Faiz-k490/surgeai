@@ -10,3 +10,4 @@ pymongo
 snowflake-connector-python
 pydantic
 pyaudio
+pyttsx3

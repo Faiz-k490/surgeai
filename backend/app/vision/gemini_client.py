@@ -120,3 +120,21 @@ class GeminiVisionClient:
                 SURGEAI_GEMINI_BACKOFF_KEY: backoff,
                 SURGEAI_SKIP_LLM_RAG_KEY: True,
             }
+
+    def narrate_scene(self, frame_jpeg: bytes) -> str:
+        prompt = "You are a surgical assistant observing a video feed. Narrate what is happening in a short, concise sentence."
+        try:
+            response = self._client.models.generate_content(
+                model=self.model,
+                contents=[
+                    types.Part.from_bytes(data=frame_jpeg, mime_type="image/jpeg"),
+                    prompt,
+                ],
+                config=types.GenerateContentConfig(
+                    temperature=0.4,
+                ),
+            )
+            return _response_text(response)
+        except Exception as exc:
+            logger.warning("Gemini narrate_scene failed: %s", exc)
+            return f"Error narrating scene: {exc}"
