@@ -1,12 +1,6 @@
 flask
 flask-socketio
-colorlog
 opencv-python
-python-dotenv
 ultralytics
-elevenlabs
-SpeechRecognition
-pymongo
-snowflake-connector-python
-pydantic
-pyaudio
+numpy
+python-dotenv

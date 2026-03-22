@@ -1,117 +1,77 @@
 # SurgeAI
 
-Real-time surgical training assistant: **Loop A** (camera + Gemini VLM + guidance) and **Loop B** (wake-word voice Q&A with RAG + Groq), plus a **React HUD** for demos.
+Real-time surgical training assistant with AR overlays, powered by YOLOv8 object detection and OpenCV spatial analysis.
 
-## Repository layout
+## Architecture
 
-| Path | Purpose |
-|------|---------|
-| [`backend/`](backend/) | Python backend (Flask + Socket.IO), VLM, integrations |
-| [`surgeon-hud/`](surgeon-hud/) | Vite + React HUD (video, Socket.IO, Q&A panel) |
-| [`docs/`](docs/) | Runbooks and architecture |
+| Component | Path | Port |
+|-----------|------|------|
+| **Backend** | `backend/server.py` | 5000 |
+| **Frontend HUD** | `surgeon-hud/` | 5173 |
+
+The backend runs a live vision pipeline: **YOLOv8n** detects objects (banana = patient tissue, knife = scalpel, scissors/fork = forceps), **OpenCV** extracts surgical features (incision zone, tool angles), and a **6-phase state machine** orchestrates the demo flow. Results stream to the React HUD via Socket.IO and MJPEG.
+
+## Quick start
+
+### 1. Backend
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\activate
+pip install -r backend\requirements.txt
+python backend\server.py
+```
+
+### 2. Frontend HUD
+
+```powershell
+cd surgeon-hud
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173` in your browser.
+
+## Physical setup
+
+Place these objects in front of your webcam:
+
+- **Banana** with a red marker line drawn on it (patient tissue + incision zone)
+- **Knife** (scalpel)
+- **Scissors or fork** (forceps/clamps)
+
+## 6-Phase demo flow
+
+| Phase | Name | Trigger |
+|-------|------|---------|
+| 0 | Idle | Scanning for objects |
+| 1 | Target Acquired | Banana detected |
+| 2 | Tool Tracking | Banana + knife both visible |
+| 3 | Incision Mode | Scalpel near tissue + red zone visible |
+| 4 | Clamping | 6 seconds of sustained incision |
+| 5 | Complete | Clamps brought near tissue |
+
+## Configuration
+
+Edit `backend/.env`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | 5000 | Backend server port |
+| `YOLO_MODEL` | yolov8n.pt | Path to YOLO weights |
+| `YOLO_CONFIDENCE` | 0.35 | Detection confidence threshold |
+| `BRIO_CAMERA_INDEX` | 0 | Camera device index |
+| `SOCKET_NAMESPACE` | /realtime | Socket.IO namespace |
+| `FRONTEND_ORIGIN` | http://localhost:5173 | CORS origin for the HUD |
+
+## Endpoints
+
+| URL | Description |
+|-----|-------------|
+| `http://localhost:5000/video` | MJPEG live video stream |
+| `http://localhost:5000/health` | Health check (camera + YOLO status) |
 
 ## Tech stack
 
-- **Backend:** Python 3.11+, Flask, Flask-SocketIO, OpenCV, Google GenAI (Gemini), Groq, Snowflake, MongoDB, ElevenLabs + PyAudio
-- **Loop B:** SpeechRecognition (Google STT), optional FastAPI + WebSocket experiment ([`backend/app/api/fastapi_app.py`](backend/app/api/fastapi_app.py))
-- **Frontend:** React, Vite, Socket.IO client
-
-## Quick start (production path)
-
-1. Create a venv and install dependencies:
-
-   ```powershell
-   cd surgeai
-   python -m venv .venv311
-   .\.venv311\Scripts\Activate.ps1
-   pip install -r backend\requirements.txt
-   ```
-
-2. Configure environment:
-
-   ```powershell
-   copy backend\.env.example backend\.env
-   ```
-
-   Edit `backend/.env` with your keys (see table in [`docs/RUN_FULL_STACK.md`](docs/RUN_FULL_STACK.md)).
-
-3. Run the unified backend **from the repo root**:
-
-   ```powershell
-   python -m backend.app.main
-   ```
-
-4. (Optional) Run the HUD (use `;` in **Windows PowerShell 5.x**, not `&&`):
-
-   ```powershell
-   copy surgeon-hud\.env.example surgeon-hud\.env
-   ```
-
-   Edit `surgeon-hud/.env`: **`VITE_API_BASE`** must match **`PORT`** in `backend/.env` (e.g. `http://localhost:5000`), and **`VITE_SOCKET_NAMESPACE`** must match **`SOCKET_NAMESPACE`** (default `/realtime`). Mismatch causes `ERR_CONNECTION_REFUSED` or Socket.IO `400` / stuck HUD.
-
-   ```powershell
-   cd surgeon-hud; npm install; npm run dev
-   ```
-
-5. Stop all dev servers (backend + Vite on common ports):
-
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts\stop-dev.ps1
-   ```
-
-## Logging (backend + HUD + scripts)
-
-- **Files:** `logging/logs/surgeai-backend.log` (rotating) — see [`logging/README.md`](logging/README.md).
-- **Backend terminal:** colored levels (green INFO, red ERROR) via `colorlog`; configure **`LOG_LEVEL`** in `backend/.env`.
-- **HUD:** open browser **DevTools → Console** — messages use green/red via `surgeon-hud/src/lib/logger.js`.
-- **Scripts:** [`scripts/_log-colors.ps1`](scripts/_log-colors.ps1) — `Write-SurgeLogGood` / `Write-SurgeLogBad` (used by `stop-dev.ps1`).
-- **Tail backend log:** `powershell -ExecutionPolicy Bypass -File scripts\tail-backend-log.ps1`
-- **HUD with log file:** `powershell -ExecutionPolicy Bypass -File scripts\dev-hud.ps1` (also writes `logging/logs/hud-dev.log`).
-
-## Documentation
-
-- **[Full stack + VLM / glasses testing](docs/RUN_FULL_STACK.md)** — ports, env vars, HUD, **VLM-only** mode
-- **[Gemini VLM — free tier & models](docs/GEMINI_VLM.md)** — `GEMINI_MODEL`, throttling, quotas
-- **[Architecture](docs/ARCHITECTURE.md)** — layers, entrypoints, data flow
-- **[Backend README](backend/README.md)** — Windows-focused notes
-
-## Entrypoints
-
-| Command | Description |
-|---------|-------------|
-| `python -m backend.app.main` | **Main** — Flask + Socket.IO + Loop A + Loop B |
-| `python merged_backend.py` | Demo server (simulated Loop A + Loop B) |
-| `python main.py` | FastAPI + WebSocket Loop B experiment (port 5000) |
-
-Root files `audio_pipeline.py`, `intelligence_pipeline.py`, `tts_pipeline.py`, `session_logger.py` are **thin shims**; canonical code lives under [`backend/app/loop_b/`](backend/app/loop_b/).
-
-**TTS:** Loop A and Loop B use **ElevenLabs + PyAudio** only ([`backend/app/audio/tts.py`](backend/app/audio/tts.py) delegates to [`backend/app/loop_b/tts_pipeline.py`](backend/app/loop_b/tts_pipeline.py)). Set **`ELEVENLABS_API_KEY`** and install **`pyaudio`**.
-
-### Google Gemini “rate limit” / “set up billing”
-
-There is **no legitimate bypass**: free tiers have low daily caps. Options:
-
-1. **Google AI Studio** (aistudio.google.com) → your API key → **Billing** / upgrade plan so the key can use paid quota.
-2. **Defaults are conservative** (`VLM_MAX_HZ=0.2`, `GEMINI_MODEL=gemini-2.5-flash`). Raise `VLM_MAX_HZ` only if you need faster VLM (uses more quota).
-3. **`GEMINI_MODEL`**: default **`gemini-2.5-flash`** — confirm in [Gemini API models](https://ai.google.dev/gemini-api/docs/models).
-
-The backend **falls back** to color-based heuristics when Gemini errors (including 429), so the HUD can still run with degraded “VLM” — check backend logs for `Gemini rate limit`.
-
-**Groq 429:** reduce guidance frequency (`GUIDANCE_MIN_INTERVAL_SECONDS`, `VLM_MAX_HZ`) or raise quota on the Groq dashboard.
-
-**HUD Socket.IO “Invalid frame header” on WebSocket:** the client uses **long-polling only** (`SocketManager.jsx`) because Werkzeug’s dev server + Flask-SocketIO in threading mode often breaks WebSocket upgrades. Events still work in real time over polling.
-
-**Chrome `A listener indicated an asynchronous response…`:** almost always a **browser extension** (password managers, ad blockers) mishandling `chrome.runtime` messages — not from this app. Reproduce in a **Guest** window or with extensions disabled.
-
-**Socket.IO `400` on `/socket.io/...&sid=...`:** ensure **`SOCKET_NAMESPACE`** in `backend/.env` matches the HUD URL (default `/realtime`; server registers `connect` on that namespace). Keep **`VITE_API_BASE`** aligned with **`PORT`**. After a backend restart, refresh the HUD so polling doesn’t reuse a stale `sid`.
-
-## Testing
-
-```powershell
-pip install -r backend/requirements-dev.txt
-python -m pytest backend/tests/ -v
-```
-
-## License / team
-
-See project docs and hackathon READMEs in `endeavors/` and `plans/` as applicable.
+- **Backend:** Python 3.11, Flask, Flask-SocketIO, OpenCV, YOLOv8 (ultralytics), NumPy
+- **Frontend:** React, Vite, Zustand, Framer Motion, Socket.IO client, Tailwind CSS
