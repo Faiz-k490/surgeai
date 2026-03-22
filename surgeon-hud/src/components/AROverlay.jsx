@@ -37,9 +37,13 @@ export default function AROverlay() {
 
         <AnimatePresence>
           {arElements.map((el, i) => {
-            if (el.type === 'box') return <BoxBracket key={`box-${i}`} el={el} />;
-            if (el.type === 'polygon') return <PolygonOutline key={`poly-${i}`} el={el} />;
-            if (el.type === 'line') return <TraceLine key={`line-${i}`} el={el} />;
+            // Use stable key: type+label (or index fallback for unlabeled elements)
+            // This prevents React from unmounting/remounting unchanged boxes (BUG-3 fix)
+            const stableKey = el.label ? `${el.type}-${el.label}` : `${el.type}-${i}`;
+            if (el.type === 'box') return <BoxBracket key={stableKey} el={el} />;
+            if (el.type === 'polygon') return <PolygonOutline key={stableKey} el={el} />;
+            if (el.type === 'line') return <TraceLine key={stableKey} el={el} />;
+            if (el.type === 'zone_debug') return <ZoneDebug key="zone_debug" />;
             return null;
           })}
         </AnimatePresence>
@@ -49,8 +53,8 @@ export default function AROverlay() {
       <AnimatePresence>
         {arElements
           .filter((el) => el.type === 'box' && el.label)
-          .map((el, i) => (
-            <BoxLabel key={`label-${i}`} el={el} />
+          .map((el) => (
+            <BoxLabel key={`label-${el.label}`} el={el} />
           ))}
       </AnimatePresence>
     </div>
@@ -113,6 +117,21 @@ function TraceLine({ el }) {
       filter="url(#glow)"
       opacity="0.85"
     />
+  );
+}
+
+
+// ── Zone Debug (spatial classification regions) ─────────────────────────────
+function ZoneDebug() {
+  return (
+    <g opacity="0.15">
+      <line x1="0.5" y1="0" x2="0.5" y2="1"
+            stroke="#ffffff" strokeWidth="0.001" strokeDasharray="0.01 0.008" />
+      <text x="0.25" y="0.04" fill="#3b82f6" fontSize="0.018"
+            textAnchor="middle" fontFamily="monospace">CLAMP</text>
+      <text x="0.75" y="0.04" fill="#22c55e" fontSize="0.018"
+            textAnchor="middle" fontFamily="monospace">SCALPEL</text>
+    </g>
   );
 }
 
