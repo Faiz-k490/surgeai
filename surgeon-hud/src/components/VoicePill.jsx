@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useHudStore } from '../store/useHudStore';
 
 function statusLabel(clientVoiceState, runtimeState) {
+  if (clientVoiceState === 'complete' || runtimeState === 'COMPLETE') return 'Session complete';
   if (clientVoiceState === 'wake') return 'Wake phrase detected';
   if (clientVoiceState === 'listening') return 'Listening for your command';
   if (clientVoiceState === 'thinking' || runtimeState === 'THINKING') return 'Analyzing the scene';
@@ -13,6 +14,13 @@ function statusLabel(clientVoiceState, runtimeState) {
 }
 
 function orbTone(clientVoiceState, runtimeState) {
+  if (clientVoiceState === 'complete' || runtimeState === 'COMPLETE') {
+    return {
+      glow: 'rgba(74,222,128,0.55)',
+      border: 'rgba(74,222,128,0.82)',
+      fill: 'rgba(74,222,128,0.24)',
+    };
+  }
   if (runtimeState === 'DEGRADED' || clientVoiceState === 'error') {
     return {
       glow: 'rgba(245,158,11,0.55)',
@@ -54,6 +62,7 @@ export default function VoicePill() {
   const voicePrompt = useHudStore((s) => s.voicePrompt);
   const micPermission = useHudStore((s) => s.micPermission);
   const transcriptPreview = useHudStore((s) => s.transcriptPreview);
+  const sessionTerminated = useHudStore((s) => s.sessionTerminated);
   const [waveData, setWaveData] = useState(Array(16).fill(0.12));
 
   const tone = useMemo(() => orbTone(clientVoiceState, runtimeState), [clientVoiceState, runtimeState]);
@@ -88,6 +97,7 @@ export default function VoicePill() {
               className="mt-1 line-clamp-2 text-sm text-white/90"
             >
               {voicePrompt
+                || (sessionTerminated ? 'Great job! Session complete.' : null)
                 || transcriptPreview
                 || (micPermission === 'denied'
                   ? 'Microphone permission was denied. Browser TTS fallback will still work.'

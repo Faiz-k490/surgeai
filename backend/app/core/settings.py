@@ -53,10 +53,12 @@ def load_settings() -> Settings:
             return ""
         return value
 
-    yolo_model = os.getenv("YOLO_MODEL", "yolov8n.pt")
+    yolo_model = os.getenv("YOLO_MODEL", "yolov8n.pt").strip() or "yolov8n.pt"
     yolo_path = Path(yolo_model)
     if not yolo_path.is_absolute():
-        yolo_path = (BACKEND_ROOT / yolo_path).resolve()
+        repo_candidate = (REPO_ROOT / yolo_path).resolve()
+        backend_candidate = (BACKEND_ROOT / yolo_path).resolve()
+        yolo_path = repo_candidate if repo_candidate.exists() else backend_candidate
 
     namespace = os.getenv("SOCKET_NAMESPACE", "/realtime").strip() or "/realtime"
     if not namespace.startswith("/"):

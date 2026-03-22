@@ -17,6 +17,7 @@ from typing import Any
 
 import cv2
 from flask import Flask, Response, jsonify, request, send_from_directory
+from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 
 from app.core.settings import settings
@@ -29,10 +30,12 @@ from app.runtime.workflow import ConversationOrchestrator, WorkflowContext
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("surgeai.backend")
+TERMINAL_COMPLETION_MESSAGE = "Great job! You made a few rough incisions, but practice makes perfect."
 
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "surgeai-demo"
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
@@ -177,6 +180,9 @@ class RuntimeController:
             self.workflow.note_transcript(clean_text)
             payload = self.workflow.build_payload(self._context_snapshot(), self.snapshot_service, self._services_payload())
         self.broadcast_state(payload)
+        if self.voice_runtime.is_completion_intent(clean_text):
+            self._handle_terminal_completion(trigger_reason=trigger_kind)
+            return
         self._run_vlm_turn(user_transcript=clean_text, trigger_reason=trigger_kind)
 
     def mark_playback_complete(self) -> None:
@@ -238,6 +244,9 @@ class RuntimeController:
             self.workflow.note_transcript(effective_transcript)
             payload = self.workflow.build_payload(self._context_snapshot(), self.snapshot_service, self._services_payload())
         self.broadcast_state(payload)
+        if self.voice_runtime.is_completion_intent(effective_transcript):
+            self._handle_terminal_completion(trigger_reason=f"{trigger_kind}_voice")
+            return
         self._run_vlm_turn(user_transcript=effective_transcript, trigger_reason=f"{trigger_kind}_voice")
 
     def handle_scene_trigger(self, trigger_reason: str) -> None:
@@ -324,6 +333,18 @@ class RuntimeController:
             namespace=settings.namespace,
         )
 
+    def _handle_terminal_completion(self, *, trigger_reason: str) -> None:
+        with self.state_lock:
+            audio_url = self._synthesize_terminal_message(trigger_reason)
+            emitted = self.workflow.apply_terminal_completion(
+                TERMINAL_COMPLETION_MESSAGE,
+                audio_url=audio_url,
+            )
+            payload = self.workflow.build_payload(self._context_snapshot(), self.snapshot_service, self._services_payload())
+        self.broadcast_state(payload)
+        if emitted and audio_url:
+            self._emit_tts_ready(audio_url, payload)
+
     def _synthesize_if_possible(self, result: dict[str, Any], trigger_label: str) -> str | None:
         speak_text = str(result.get("speak_text") or result.get("next_instruction") or "").strip()
         if not speak_text or not self.workflow.session_id:
@@ -336,6 +357,19 @@ class RuntimeController:
             )
         except Exception as exc:
             logger.warning("TTS synthesis failed: %s", exc)
+            return None
+
+    def _synthesize_terminal_message(self, trigger_label: str) -> str | None:
+        if not self.workflow.session_id:
+            return None
+        try:
+            return self.voice_runtime.synthesize_audio(
+                self.workflow.session_id,
+                f"{trigger_label}_terminal_{int(time.time() * 1000)}",
+                TERMINAL_COMPLETION_MESSAGE,
+            )
+        except Exception as exc:
+            logger.warning("Terminal TTS synthesis failed: %s", exc)
             return None
 
     def _set_degraded(self, warning: str, hint: str) -> None:

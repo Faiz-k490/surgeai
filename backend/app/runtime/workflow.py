@@ -31,6 +31,7 @@ RUNTIME_STATES = {
     4: "THINKING",
     5: "SPEAKING",
     6: "DEGRADED",
+    7: "COMPLETE",
 }
 
 SURGICAL_STEPS = {
@@ -74,6 +75,7 @@ class ConversationOrchestrator:
         self.last_major_scene_reason: str | None = None
         self.scene_events: list[str] = []
         self.completion_snapshot_requested = False
+        self.session_terminated = False
 
     def activate(self) -> None:
         self.session_id = uuid.uuid4().hex[:8]
@@ -96,19 +98,20 @@ class ConversationOrchestrator:
         self.last_major_scene_reason = None
         self.scene_events = []
         self.completion_snapshot_requested = False
+        self.session_terminated = False
         logger.info("Activated conversational session %s", self.session_id)
 
     def reset(self) -> None:
         self.__init__(self.settings)
 
     def note_capture_started(self) -> None:
-        if self.phase == 0:
+        if self.phase == 0 or self.session_terminated:
             return
         self.runtime_state = RUNTIME_STATES[3]
         self.warning = "Listening for: 'Hey Surgeon...'"
 
     def note_capture_cancelled(self) -> None:
-        if self.phase == 0:
+        if self.phase == 0 or self.session_terminated:
             return
         self.runtime_state = RUNTIME_STATES[2]
         self.warning = None
@@ -117,12 +120,12 @@ class ConversationOrchestrator:
     def note_transcript(self, transcript: str | None) -> None:
         self.transcript_preview = transcript.strip() if transcript else None
         self.last_user_transcript = self.transcript_preview
-        if self.phase != 0:
+        if self.phase != 0 and not self.session_terminated:
             self.runtime_state = RUNTIME_STATES[4]
 
     def note_vlm_call(self, now: float | None = None) -> None:
         self.last_vlm_call_at = now or time.time()
-        if self.phase != 0:
+        if self.phase != 0 and not self.session_terminated:
             self.runtime_state = RUNTIME_STATES[4]
 
     def can_call_vlm(self, now: float | None = None) -> bool:
@@ -131,7 +134,7 @@ class ConversationOrchestrator:
 
     def should_auto_nudge(self, context: WorkflowContext) -> tuple[bool, str | None]:
         now = time.time()
-        if self.phase == 0 or self.runtime_state in {RUNTIME_STATES[3], RUNTIME_STATES[4], RUNTIME_STATES[5]}:
+        if self.phase == 0 or self.session_terminated or self.runtime_state in {RUNTIME_STATES[3], RUNTIME_STATES[4], RUNTIME_STATES[5]}:
             return False, None
         reason = self._major_scene_reason(context, now)
         if reason is None:
@@ -188,27 +191,52 @@ class ConversationOrchestrator:
         return True
 
     def apply_degraded_response(self, warning: str, next_hint: str, audio_url: str | None = None) -> None:
+        if self.session_terminated:
+            return
         self.runtime_state = RUNTIME_STATES[6]
         self.warning = warning
         self.next_step_hint = next_hint
         self.voice_audio_url = audio_url
 
     def mark_playback_complete(self) -> None:
+        if self.phase == 0:
+            return
+        if self.session_terminated or self.surgical_step == "complete":
+            self.runtime_state = RUNTIME_STATES[7]
+            self.warning = "Session Complete"
+            return
         if self.phase != 0:
             self.runtime_state = RUNTIME_STATES[2]
+
+    def apply_terminal_completion(self, message: str, *, audio_url: str | None = None) -> bool:
+        if self.phase == 0:
+            return False
+        self.session_terminated = True
+        self.surgical_step = "complete"
+        self.warning = "Session Complete"
+        self.next_step_hint = "Session Complete"
+        self.last_assistant_reply = message
+        self.voice_audio_url = audio_url
+        self.completion_snapshot_requested = True
+        self.last_response_fingerprint = hashlib.sha1(message.lower().encode("utf-8")).hexdigest()
+        self.last_response_at = time.time()
+        self._queue_voice(message)
+        self.runtime_state = RUNTIME_STATES[5] if audio_url else RUNTIME_STATES[7]
+        return True
 
     def observe_scene(self, context: WorkflowContext) -> None:
         now = time.time()
         if self.phase == 1 and context.frame is not None:
             self.phase = 1
-            self.runtime_state = RUNTIME_STATES[2]
+            if not self.session_terminated:
+                self.runtime_state = RUNTIME_STATES[2]
 
         self.scene_events = self._scene_events(context, now)
         self.warning = self._warning_for_scene(context, now)
         if not self.warning and self.runtime_state == RUNTIME_STATES[1]:
             self.runtime_state = RUNTIME_STATES[2]
 
-        if self.phase != 0 and self.surgical_step != "complete":
+        if self.phase != 0 and self.surgical_step != "complete" and not self.session_terminated:
             self.surgical_step = self._suggest_step(context, now, self.surgical_step)
 
     def maybe_finalize_completion(self, context: WorkflowContext, snapshot_service: SnapshotService) -> None:
@@ -258,6 +286,7 @@ class ConversationOrchestrator:
             "transcript_preview": self.transcript_preview,
             "snapshot_status": snapshot_service.health(),
             "services": services,
+            "session_terminated": self.session_terminated,
         }
 
     def health(self) -> dict[str, Any]:
@@ -267,6 +296,7 @@ class ConversationOrchestrator:
             "last_vlm_call_at": self.last_vlm_call_at,
             "last_major_scene_at": self.last_major_scene_at,
             "last_major_scene_reason": self.last_major_scene_reason,
+            "session_terminated": self.session_terminated,
         }
 
     def _queue_voice(self, message: str) -> None:

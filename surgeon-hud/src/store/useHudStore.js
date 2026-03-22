@@ -26,6 +26,7 @@ export const useHudStore = create((set) => ({
   transcriptPreview: null,
   sceneEvents: [],
   services: {},
+  sessionTerminated: false,
 
   // Metrics
   systemMetrics: {
@@ -80,5 +81,6 @@ export const useHudStore = create((set) => ({
     transcriptPreview: state.transcript_preview || null,
     sceneEvents: state.scene_events || [],
     services: state.services || {},
+    sessionTerminated: Boolean(state.session_terminated),
   }),
 }));

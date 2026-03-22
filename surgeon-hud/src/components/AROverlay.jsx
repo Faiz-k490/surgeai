@@ -42,7 +42,7 @@ export default function AROverlay() {
             const stableKey = el.label ? `${el.type}-${el.label}` : `${el.type}-${i}`;
             if (el.type === 'box') return <BoxBracket key={stableKey} el={el} />;
             if (el.type === 'polygon') return <PolygonOutline key={stableKey} el={el} />;
-            if (el.type === 'line') return <TraceLine key={stableKey} el={el} />;
+            if (el.type === 'line') return null; // <TraceLine key={stableKey} el={el} />;
             if (el.type === 'zone_debug') return <ZoneDebug key="zone_debug" />;
             return null;
           })}

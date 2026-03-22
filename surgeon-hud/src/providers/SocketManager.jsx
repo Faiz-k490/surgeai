@@ -32,6 +32,7 @@ export default function SocketManager({ children }) {
   const setListeningState = useHudStore((s) => s.setListeningState);
   const setTranscriptPreview = useHudStore((s) => s.setTranscriptPreview);
   const setClientVoiceState = useHudStore((s) => s.setClientVoiceState);
+  const sessionTerminated = useHudStore((s) => s.sessionTerminated);
 
   const socketRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -70,6 +71,15 @@ export default function SocketManager({ children }) {
 
       recognition.onstart = () => {
         setMicPermission('granted');
+        if (useHudStore.getState().sessionTerminated) {
+          shouldRunRecognitionRef.current = false;
+          try {
+            recognition.stop();
+          } catch {
+            // no-op
+          }
+          return;
+        }
         if (!activeCommandRef.current) {
           setClientVoiceState('passive');
         }
@@ -80,6 +90,10 @@ export default function SocketManager({ children }) {
           const result = event.results[index];
           const transcript = result[0]?.transcript?.trim() || '';
           if (!transcript) continue;
+          if (useHudStore.getState().sessionTerminated) {
+            activeCommandRef.current = false;
+            return;
+          }
 
           const normalized = transcript.toLowerCase();
           const wakeMatch = normalized.includes('hey surgeon');
@@ -262,18 +276,26 @@ export default function SocketManager({ children }) {
 
               const audio = new Audio(audioSrc);
               playbackAudioRef.current = audio;
-              audio.onended = () => {
+          audio.onended = () => {
                 socket.emit('voice_playback_complete');
-                setClientVoiceState('passive');
-                startRecognition();
+                if (useHudStore.getState().sessionTerminated) {
+                  setClientVoiceState('complete');
+                } else {
+                  setClientVoiceState('passive');
+                  startRecognition();
+                }
               };
               await audio.play();
             } catch (error) {
               log.warn(`Audio playback failed, using browser TTS fallback: ${error?.message || error}`);
               speakFallback(voicePrompt);
               socket.emit('voice_playback_complete');
-              setClientVoiceState('passive');
-              startRecognition();
+              if (useHudStore.getState().sessionTerminated) {
+                setClientVoiceState('complete');
+              } else {
+                setClientVoiceState('passive');
+                startRecognition();
+              }
             }
           });
 
@@ -297,6 +319,14 @@ export default function SocketManager({ children }) {
       socketRef.current = null;
     };
   }, [applyFrameState, setClientVoiceState, setIsConnected, setMetrics, startRecognition, stopRecognition]);
+
+  useEffect(() => {
+    if (!sessionTerminated) return;
+    activeCommandRef.current = false;
+    stopRecognition();
+    setListeningState('complete');
+    setClientVoiceState('complete');
+  }, [sessionTerminated, setClientVoiceState, setListeningState, stopRecognition]);
 
   useEffect(() => {
     const socket = socketRef.current;

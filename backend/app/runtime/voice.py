@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import re
 import time
-from pathlib import Path
 from typing import Any
 
 import requests
@@ -15,6 +14,22 @@ logger = logging.getLogger("surgeai.voice")
 
 
 WAKE_WORD_PATTERN = re.compile(r"^\s*(hey[\s,-]*surgeon)\b[:,!\-\s]*", re.IGNORECASE)
+NON_ALPHANUMERIC_PATTERN = re.compile(r"[^a-z0-9\s]")
+COMPLETION_PHRASES = (
+    "im done",
+    "i am done",
+    "done now",
+    "im finished",
+    "i am finished",
+    "finished now",
+    "we are done",
+    "were done",
+    "that is it",
+    "thats it",
+    "all done",
+    "all finished",
+    "procedure complete",
+)
 
 
 class VoiceRuntime:
@@ -69,6 +84,28 @@ class VoiceRuntime:
             return False, (transcript or "").strip()
         remainder = WAKE_WORD_PATTERN.sub("", transcript, count=1).strip()
         return True, remainder
+
+    def is_completion_intent(self, transcript: str | None) -> bool:
+        normalized = self._normalize_text(transcript)
+        if not normalized:
+            return False
+
+        if any(phrase in normalized for phrase in COMPLETION_PHRASES):
+            return True
+
+        tokens = set(normalized.split())
+        if {"done", "finished"} & tokens:
+            if {"im", "i", "am", "all", "procedure", "session"} & tokens:
+                return True
+        if "complete" in tokens and {"procedure", "session", "im", "i"} & tokens:
+            return True
+        return False
+
+    def _normalize_text(self, transcript: str | None) -> str:
+        text = (transcript or "").lower()
+        text = text.replace("i'm", "im").replace("we're", "were").replace("that's", "thats")
+        text = NON_ALPHANUMERIC_PATTERN.sub(" ", text)
+        return " ".join(text.split())
 
     def synthesize_audio(self, session_id: str, voice_event_id: str, text: str) -> str | None:
         if not self.settings.elevenlabs_api_key:

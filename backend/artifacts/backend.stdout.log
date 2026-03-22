@@ -1,0 +1,10 @@
+=======================================================
+  SurgeAI Conversational Backend
+  Video:     http://localhost:5000/video
+  Health:    http://localhost:5000/health
+  Socket.IO: http://localhost:5000/realtime
+  YOLO:      Loaded
+  Camera:    BRIO locked to index 1
+=======================================================
+ * Serving Flask app 'server'
+ * Debug mode: off
