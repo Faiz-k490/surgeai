@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
+import cadModelImg from './Hardware CAD Model.png';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    SurgeonAI — Landing Page v3
@@ -259,7 +260,7 @@ export default function LandingPage({ onEnter }) {
                 Surgeons need{' '}
                 <GlitchText><span style={{ color: '#2dd4bf' }}>practice.</span></GlitchText>
                 <br />
-                <span style={{ color: 'rgba(255,255,255,0.25)' }}>There aren't enough trainers.</span>
+                <span style={{ color: 'rgba(255,255,255,0.7)' }}>There aren't enough trainers.</span>
               </motion.h1>
 
               {/* Terminal style subtitle */}
@@ -435,7 +436,7 @@ export default function LandingPage({ onEnter }) {
                     />
                     <div style={{ padding: '20px 22px 24px' }}>
                       <h3 style={{ fontFamily: FONT_HEADING, fontSize: 17, fontWeight: 700, color: 'rgba(255,255,255,0.85)', marginBottom: 8 }}>{title}</h3>
-                      <p style={{ fontSize: 12, lineHeight: 1.7, color: 'rgba(255,255,255,0.3)' }}>{body}</p>
+                      <p style={{ fontSize: 12, lineHeight: 1.7, color: 'rgba(255,255,255,0.7)' }}>{body}</p>
                     </div>
                   </motion.div>
                 ))}
@@ -456,7 +457,7 @@ export default function LandingPage({ onEnter }) {
                 <h2 style={{ fontFamily: FONT_HEADING, fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: 900, marginTop: 12, lineHeight: 1.15, maxWidth: 640 }}>
                   An AI trainer that <span style={{ color: '#2dd4bf' }}>never leaves</span> the OR.
                 </h2>
-                <p style={{ marginTop: 16, fontSize: 14, color: 'rgba(255,255,255,0.3)', maxWidth: 560, lineHeight: 1.7 }}>
+                <p style={{ marginTop: 16, fontSize: 14, color: 'rgba(255,255,255,0.7)', maxWidth: 560, lineHeight: 1.7 }}>
                   SurgeonAI uses a live camera, a real scalpel, and a computer-vision pipeline to
                   guide trainees through precise surgical procedures — measuring every angle, flagging every deviation, in real time.
                 </p>
@@ -585,6 +586,89 @@ export default function LandingPage({ onEnter }) {
             </div>
           </section>
 
+          {/* ── OPEN SOURCE HARDWARE ────────────────────── */}
+          <section style={{ padding: '80px 32px', position: 'relative', background: 'rgba(255,255,255,0.015)', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+            <div style={{ maxWidth: 1080, margin: '0 auto', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 48 }}>
+              {/* Text Side */}
+              <div style={{ flex: '1 1 400px' }}>
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                >
+                  <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.4em', textTransform: 'uppercase', color: 'rgba(167,139,250,0.8)' }}>🌍 Open Source Hardware</span>
+                  <h2 style={{ fontFamily: FONT_HEADING, fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 900, marginTop: 12, lineHeight: 1.15 }}>
+                    Democratizing Surgical <span style={{ color: '#a78bfa' }}>Training.</span>
+                  </h2>
+                  <p style={{ marginTop: 16, fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 1.7 }}>
+                    The physical SurgeonAI mount is entirely open-source. Anyone with a 3D printer and less than $25 can build our hardware at home or in a clinical setting.
+                  </p>
+                  <p style={{ marginTop: 12, fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 1.7 }}>
+                    By removing expensive hardware barriers, we enable doctors and medical students in the third world to access our surgical platform without massive overhead costs.
+                  </p>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 15 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.2 }}
+                    style={{ marginTop: 28 }}
+                  >
+                    <a
+                      href="#"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 8,
+                        padding: '12px 24px', borderRadius: 12,
+                        border: '1px solid rgba(167,139,250,0.3)',
+                        background: 'rgba(167,139,250,0.1)',
+                        color: 'rgba(167,139,250,0.95)',
+                        fontFamily: FONT_HEADING, fontSize: 12, fontWeight: 700, letterSpacing: '0.1em',
+                        textDecoration: 'none', textTransform: 'uppercase',
+                        transition: 'all 0.3s ease',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(167,139,250,0.2)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(167,139,250,0.1)'; }}
+                    >
+                      <span>💾 Get the CAD Files</span>
+                    </a>
+                  </motion.div>
+                </motion.div>
+              </div>
+
+              {/* CAD Model Image Side */}
+              <div style={{ flex: '1 1 400px', display: 'flex', justifyContent: 'center' }}>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  whileInView={{ opacity: 1, scale: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.2 }}
+                  style={{
+                    position: 'relative',
+                    width: '100%',
+                    maxWidth: 500,
+                    borderRadius: 20,
+                    border: '1px solid rgba(167,139,250,0.2)',
+                    background: 'linear-gradient(135deg, rgba(167,139,250,0.05), rgba(45,212,191,0.02))',
+                    padding: 4,
+                    boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+                  }}
+                >
+                  <img src={cadModelImg} alt="Hardware CAD Model" style={{ width: '100%', borderRadius: 16, display: 'block', objectFit: 'contain', backgroundColor: 'rgba(0,0,0,0.2)' }} />
+                  <div style={{
+                    position: 'absolute', top: 16, right: 16,
+                    padding: '4px 8px', borderRadius: 6,
+                    background: 'rgba(8,8,13,0.8)', backdropFilter: 'blur(4px)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.8)',
+                    letterSpacing: '0.1em', textTransform: 'uppercase'
+                  }}>
+                    Model v1.0
+                  </div>
+                </motion.div>
+              </div>
+            </div>
+          </section>
+
           {/* ── BUILT WITH ──────────────────────────────── */}
           <section style={{
             padding: '56px 32px',
@@ -647,7 +731,7 @@ export default function LandingPage({ onEnter }) {
                 <h2 style={{ fontFamily: FONT_HEADING, fontSize: 'clamp(26px, 3.5vw, 40px)', fontWeight: 900, marginBottom: 12 }}>
                   Ready to <GlitchText><span style={{ color: '#2dd4bf' }}>operate?</span></GlitchText>
                 </h2>
-                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', marginBottom: 32 }}>
+                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 32 }}>
                   Pick up your scalpel. The AI is watching.
                 </p>
                 <motion.button
