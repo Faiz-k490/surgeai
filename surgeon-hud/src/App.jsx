@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { useState } from 'react';
 import { useHudStore } from './store/useHudStore';
 import SocketManager from './providers/SocketManager';
 import BootScreen from './components/BootScreen';
@@ -7,6 +8,7 @@ import SystemHealth from './components/SystemHealth';
 import AROverlay from './components/AROverlay';
 import VoicePill from './components/VoicePill';
 import ConnectionFallback from './components/ConnectionFallback';
+import LandingPage from './components/LandingPage';
 
 
 // ── Phase 0: Scanning Dot ──────────────────────────────────────────────────
@@ -189,58 +191,72 @@ function SurgeryComplete() {
 // ── App ────────────────────────────────────────────────────────────────────
 function App() {
   const isBooted = useHudStore((s) => s.isBooted);
+  const [showLanding, setShowLanding] = useState(true);
 
   return (
-    <SocketManager>
-      <main className="relative w-screen h-screen overflow-hidden bg-black">
-        {/* Z-100: Boot Sequence */}
-        <BootScreen />
+    <>
+      {/* Landing page — full-screen, shown until user clicks CTA */}
+      <AnimatePresence>
+        {showLanding && (
+          <LandingPage onEnter={() => setShowLanding(false)} />
+        )}
+      </AnimatePresence>
 
-        <AnimatePresence>
-          {isBooted && (
-            <motion.div
-              key="hud"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="absolute inset-0"
-            >
-              {/* Z-0: Live Video Feed (MJPEG from backend) */}
-              <VideoBackground />
+      {/* HUD system — mounted once landing exits */}
+      {!showLanding && (
+        <SocketManager>
+          <main className="relative w-screen h-screen overflow-hidden bg-black">
+            {/* Z-100: Boot Sequence */}
+            <BootScreen />
 
-              {/* Z-5: Scanning dot (Phase 0 only) */}
-              <ScanningDot />
+            <AnimatePresence>
+              {isBooted && (
+                <motion.div
+                  key="hud"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  className="absolute inset-0"
+                >
+                  {/* Z-0: Live Video Feed (MJPEG from backend) */}
+                  <VideoBackground />
 
-              {/* Z-10: AR Overlay (SVG boxes/polygons/lines) */}
-              <AROverlay />
+                  {/* Z-5: Scanning dot (Phase 0 only) */}
+                  <ScanningDot />
 
-              {/* Z-15: FPS / Latency readout */}
-              <div className="relative z-[15]">
-                <SystemHealth />
-              </div>
+                  {/* Z-10: AR Overlay (SVG boxes/polygons/lines) */}
+                  <AROverlay />
 
-              {/* Z-20: Angle HUD (Phase 3 only) */}
-              <AnimatePresence>
-                <AngleHUD />
-              </AnimatePresence>
+                  {/* Z-15: FPS / Latency readout */}
+                  <div className="relative z-[15]">
+                    <SystemHealth />
+                  </div>
 
-              {/* Z-30: Warning Banner */}
-              <WarningBanner />
+                  {/* Z-20: Angle HUD (Phase 3 only) */}
+                  <AnimatePresence>
+                    <AngleHUD />
+                  </AnimatePresence>
 
-              {/* Z-40: Voice Pill (Dynamic Island, TOP) */}
-              <VoicePill />
+                  {/* Z-30: Warning Banner */}
+                  <WarningBanner />
 
-              {/* Z-50: Surgery Complete */}
-              <SurgeryComplete />
+                  {/* Z-40: Voice Pill (Dynamic Island, TOP) */}
+                  <VoicePill />
 
-              {/* Z-100: Connection Fallback */}
-              <ConnectionFallback />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
-    </SocketManager>
+                  {/* Z-50: Surgery Complete */}
+                  <SurgeryComplete />
+
+                  {/* Z-100: Connection Fallback */}
+                  <ConnectionFallback />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </main>
+        </SocketManager>
+      )}
+    </>
   );
 }
 
 export default App;
+
