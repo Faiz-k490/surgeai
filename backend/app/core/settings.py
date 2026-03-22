@@ -29,12 +29,6 @@ class Settings:
     neutral_zone_ratio: float
     track_ttl_seconds: float
     smoothing_alpha: float
-    banana_stable_seconds: float
-    tool_stable_seconds: float
-    confirmation_pause_seconds: float
-    scalpel_contact_seconds: float
-    surgery_window_seconds: float
-    clamp_window_seconds: float
     mongodb_uri: str
     openai_api_key: str
     openai_vision_model: str
@@ -42,8 +36,6 @@ class Settings:
     elevenlabs_stt_model: str
     elevenlabs_tts_model: str
     elevenlabs_tts_voice_id: str
-    voice_chunk_ms: int
-    voice_silence_ms: int
     vlm_cooldown_seconds: float
     major_scene_cooldown_seconds: float
     response_dedupe_seconds: float
@@ -78,12 +70,6 @@ def load_settings() -> Settings:
         neutral_zone_ratio=float(os.getenv("NEUTRAL_ZONE_RATIO", "0.08")),
         track_ttl_seconds=float(os.getenv("TRACK_TTL_SECONDS", "0.65")),
         smoothing_alpha=float(os.getenv("TRACK_SMOOTHING_ALPHA", "0.72")),
-        banana_stable_seconds=float(os.getenv("BANANA_STABLE_SECONDS", "2.5")),
-        tool_stable_seconds=float(os.getenv("TOOL_STABLE_SECONDS", "2.5")),
-        confirmation_pause_seconds=float(os.getenv("CONFIRMATION_PAUSE_SECONDS", "2.0")),
-        scalpel_contact_seconds=float(os.getenv("SCALPEL_CONTACT_SECONDS", "2.5")),
-        surgery_window_seconds=float(os.getenv("SURGERY_WINDOW_SECONDS", "10.0")),
-        clamp_window_seconds=float(os.getenv("CLAMP_WINDOW_SECONDS", "10.0")),
         mongodb_uri=os.getenv("MONGODB_URI", "mongodb://localhost:27017"),
         openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-4-vision-preview").strip(),
@@ -91,8 +77,6 @@ def load_settings() -> Settings:
         elevenlabs_stt_model=os.getenv("ELEVENLABS_STT_MODEL", "scribe_v1").strip(),
         elevenlabs_tts_model=os.getenv("ELEVENLABS_TTS_MODEL", "eleven_turbo_v2_5").strip(),
         elevenlabs_tts_voice_id=os.getenv("ELEVENLABS_TTS_VOICE_ID", "").strip(),
-        voice_chunk_ms=int(os.getenv("VOICE_CHUNK_MS", "250")),
-        voice_silence_ms=int(os.getenv("VOICE_SILENCE_MS", "1200")),
         vlm_cooldown_seconds=float(os.getenv("VLM_COOLDOWN_SECONDS", "2.5")),
         major_scene_cooldown_seconds=float(os.getenv("MAJOR_SCENE_COOLDOWN_SECONDS", "2.5")),
         response_dedupe_seconds=float(os.getenv("RESPONSE_DEDUPE_SECONDS", "8.0")),
