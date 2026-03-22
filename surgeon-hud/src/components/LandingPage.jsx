@@ -1,126 +1,210 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 
-// ── Animated ECG / heartbeat path ──────────────────────────────────────────
-function ECGLine({ className }) {
+/* ═══════════════════════════════════════════════════════════════════════════
+   SurgeonAI — Landing Page v4 (SUPER COLORFUL + PIXEL FONT)
+   Pixel art + Outfit/Space Grotesk + Press Start 2P
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const FONT_HEADING = "'Outfit', sans-serif";
+const FONT_BODY = "'Space Grotesk', sans-serif";
+const FONT_PIXEL = "'Press Start 2P', cursive";
+
+// ── Tech stack with links ──────────────────────────────────────────────────
+const TECH_STACK = [
+  { name: 'YOLOv8', url: 'https://docs.ultralytics.com/', color: '#2dd4bf' },
+  { name: 'OpenCV', url: 'https://opencv.org/', color: '#3b82f6' },
+  { name: 'Flask', url: 'https://flask.palletsprojects.com/', color: '#f59e0b' },
+  { name: 'Socket.IO', url: 'https://socket.io/', color: '#a78bfa' },
+  { name: 'React', url: 'https://react.dev/', color: '#61dafb' },
+  { name: 'Vite', url: 'https://vitejs.dev/', color: '#ffbd00' },
+  { name: 'ElevenLabs', url: 'https://elevenlabs.io/', color: '#ec4899' },
+  { name: 'Google Cloud', url: 'https://cloud.google.com/', color: '#4285f4' },
+  { name: 'Snowflake', url: 'https://www.snowflake.com/', color: '#29b6f6' },
+  { name: 'MongoDB', url: 'https://www.mongodb.com/', color: '#4daf50' },
+];
+
+// ── Background Gradient Mesh ───────────────────────────────────────────────
+function GradientMesh() {
   return (
-    <svg className={`${className} overflow-visible`} viewBox="0 0 400 60" fill="none">
-      <motion.polyline
-        points="0,30 40,30 55,10 70,50 85,30 100,30 115,5 130,55 145,30 400,30"
-        stroke="url(#ecgGrad)"
-        strokeWidth="1.5"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        initial={{ pathLength: 0, opacity: 0 }}
-        animate={{ pathLength: 1, opacity: 1 }}
-        transition={{ duration: 2, ease: 'easeInOut', delay: 0.5 }}
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
+      {/* Cyan orb */}
+      <motion.div
+        animate={{
+          x: [0, 100, -50, 0],
+          y: [0, -150, 50, 0],
+          scale: [1, 1.2, 0.9, 1],
+        }}
+        transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+        style={{
+          position: 'absolute', top: '10%', left: '15%',
+          width: 600, height: 600, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(45,212,191,0.15) 0%, transparent 70%)',
+          filter: 'blur(80px)',
+        }}
       />
-      <defs>
-        <linearGradient id="ecgGrad" x1="0" y1="0" x2="400" y2="0" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#0d9488" stopOpacity="0" />
-          <stop offset="40%" stopColor="#2dd4bf" stopOpacity="0.9" />
-          <stop offset="100%" stopColor="#14b8a6" stopOpacity="0.2" />
-        </linearGradient>
-      </defs>
-    </svg>
+      {/* Purple orb */}
+      <motion.div
+        animate={{
+          x: [0, -120, 80, 0],
+          y: [0, 100, -100, 0],
+          scale: [1, 1.3, 0.8, 1],
+        }}
+        transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
+        style={{
+          position: 'absolute', bottom: '15%', right: '10%',
+          width: 700, height: 700, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(167,139,250,0.15) 0%, transparent 70%)',
+          filter: 'blur(100px)',
+        }}
+      />
+      {/* Pink orb */}
+      <motion.div
+        animate={{
+          x: [0, 50, -80, 0],
+          y: [0, 80, 120, 0],
+        }}
+        transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
+        style={{
+          position: 'absolute', top: '40%', left: '40%',
+          width: 500, height: 500, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(244,114,182,0.1) 0%, transparent 70%)',
+          filter: 'blur(120px)',
+        }}
+      />
+    </div>
   );
 }
 
-// ── Animated number counter ────────────────────────────────────────────────
-function CountUp({ from, to, suffix = '', duration = 2 }) {
-  const [val, setVal] = useState(from);
+// ── Pixel-style animated typing ────────────────────────────────────────────
+function TypeWriter({ text, delay = 0, speed = 35 }) {
+  const [displayed, setDisplayed] = useState('');
   useEffect(() => {
+    const timer = setTimeout(() => {
+      let i = 0;
+      const iv = setInterval(() => {
+        setDisplayed(text.slice(0, ++i));
+        if (i >= text.length) clearInterval(iv);
+      }, speed);
+      return () => clearInterval(iv);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [text, delay, speed]);
+  return (
+    <span>
+      {displayed}
+      <motion.span
+        animate={{ opacity: [1, 0] }}
+        transition={{ duration: 0.5, repeat: Infinity, repeatType: 'reverse' }}
+        style={{ display: 'inline-block', width: 2, height: '1em', background: '#2dd4bf', marginLeft: 2, verticalAlign: 'middle' }}
+      />
+    </span>
+  );
+}
+
+// ── Floating pixel particles ───────────────────────────────────────────────
+function FloatingPixels() {
+  const pixels = Array.from({ length: 24 }, (_, i) => ({
+    id: i,
+    left: `${Math.random() * 100}%`,
+    delay: Math.random() * 6,
+    duration: 6 + Math.random() * 10,
+    size: 2 + Math.floor(Math.random() * 4),
+    color: ['#2dd4bf', '#a78bfa', '#f472b6', '#67e8f9'][Math.floor(Math.random() * 4)],
+  }));
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 1 }}>
+      {pixels.map((p) => (
+        <motion.div
+          key={p.id}
+          style={{
+            position: 'absolute',
+            left: p.left,
+            width: p.size,
+            height: p.size,
+            backgroundColor: p.color,
+            boxShadow: `0 0 ${p.size * 3}px ${p.color}`,
+          }}
+          initial={{ bottom: -10, opacity: 0 }}
+          animate={{ bottom: '110%', opacity: [0, 0.7, 0.7, 0] }}
+          transition={{ duration: p.duration, delay: p.delay, repeat: Infinity, ease: 'linear' }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── Glitch text ────────────────────────────────────────────────────────────
+function GlitchText({ children, color1 = '#a78bfa', color2 = '#2dd4bf' }) {
+  return (
+    <span style={{ position: 'relative', display: 'inline-block' }}>
+      <span style={{ position: 'relative', zIndex: 1 }}>{children}</span>
+      <motion.span
+        style={{ position: 'absolute', top: 0, left: 0, color: color1, clipPath: 'inset(0 0 65% 0)', zIndex: 0, opacity: 0.6 }}
+        animate={{ x: [0, -2, 2, 0], y: [0, 1, -1, 0] }}
+        transition={{ duration: 0.3, repeat: Infinity, repeatDelay: 4 }}
+        aria-hidden
+      >{children}</motion.span>
+      <motion.span
+        style={{ position: 'absolute', top: 0, left: 0, color: color2, clipPath: 'inset(65% 0 0 0)', zIndex: 0, opacity: 0.6 }}
+        animate={{ x: [0, 2, -2, 0], y: [0, -1, 1, 0] }}
+        transition={{ duration: 0.3, repeat: Infinity, repeatDelay: 4, delay: 0.05 }}
+        aria-hidden
+      >{children}</motion.span>
+    </span>
+  );
+}
+
+// ── Animated counter ───────────────────────────────────────────────────────
+function CountUp({ to, suffix = '', duration = 1.5 }) {
+  const [val, setVal] = useState(0);
+  const ref = useRef(null);
+  const [started, setStarted] = useState(false);
+
+  useEffect(() => {
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setStarted(true); }, { threshold: 0.3 });
+    if (ref.current) obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!started) return;
     let start = null;
     const step = (ts) => {
       if (!start) start = ts;
-      const progress = Math.min((ts - start) / (duration * 1000), 1);
-      setVal(Math.round(from + (to - from) * progress));
-      if (progress < 1) requestAnimationFrame(step);
+      const p = Math.min((ts - start) / (duration * 1000), 1);
+      setVal(Math.round(to * p));
+      if (p < 1) requestAnimationFrame(step);
     };
-    const raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [from, to, duration]);
-  return <>{val}{suffix}</>;
+    requestAnimationFrame(step);
+  }, [started, to, duration]);
+
+  return <span ref={ref}>{val}{suffix}</span>;
 }
 
-// ── Floating grid dot ──────────────────────────────────────────────────────
-function GridBackground() {
+// ── Scanlines ──────────────────────────────────────────────────────────────
+function Scanlines() {
   return (
     <div
-      className="absolute inset-0 pointer-events-none"
       style={{
-        backgroundImage: `
-          linear-gradient(rgba(45,212,191,0.04) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(45,212,191,0.04) 1px, transparent 1px)`,
-        backgroundSize: '48px 48px',
+        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 100, opacity: 0.03,
+        backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.5) 2px, rgba(0,0,0,0.5) 4px)',
       }}
     />
   );
 }
 
-// ── Stat card ──────────────────────────────────────────────────────────────
-function StatCard({ number, suffix, label, delay }) {
-  const [inView, setInView] = useState(false);
-  const ref = useRef(null);
 
-  useEffect(() => {
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setInView(true); }, { threshold: 0.3 });
-    if (ref.current) obs.observe(ref.current);
-    return () => obs.disconnect();
-  }, []);
-
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ delay, duration: 0.6 }}
-      className="flex flex-col items-center gap-2 px-8 py-6 rounded-2xl border border-teal-500/15 bg-teal-950/10 backdrop-blur-sm"
-    >
-      <span
-        className="text-5xl font-bold font-mono tabular-nums"
-        style={{ color: '#2dd4bf', textShadow: '0 0 30px rgba(45,212,191,0.4)' }}
-      >
-        {inView ? <CountUp from={0} to={number} suffix={suffix} duration={2} /> : `0${suffix}`}
-      </span>
-      <span className="text-xs font-mono tracking-[0.2em] text-white/40 uppercase text-center max-w-[140px] leading-relaxed">
-        {label}
-      </span>
-    </motion.div>
-  );
-}
-
-// ── Problem card ───────────────────────────────────────────────────────────
-function ProblemCard({ icon, title, body, delay }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ delay, duration: 0.6 }}
-      className="flex flex-col gap-4 p-6 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-sm hover:border-teal-500/20 transition-colors duration-500 group"
-    >
-      <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
-        style={{ background: 'rgba(45,212,191,0.08)', border: '1px solid rgba(45,212,191,0.15)' }}
-      >
-        {icon}
-      </div>
-      <h3 className="text-base font-semibold text-white/80 group-hover:text-white transition-colors">{title}</h3>
-      <p className="text-sm text-white/35 leading-relaxed group-hover:text-white/50 transition-colors">{body}</p>
-    </motion.div>
-  );
-}
-
-// ── Main Landing Page ──────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ══════════════════════════════════════════════════════════════════════════
 export default function LandingPage({ onEnter }) {
   const [entering, setEntering] = useState(false);
 
   const handleEnter = () => {
     setEntering(true);
-    setTimeout(() => onEnter(), 800);
+    setTimeout(() => onEnter(), 900);
   };
 
   return (
@@ -128,36 +212,43 @@ export default function LandingPage({ onEnter }) {
       {!entering ? (
         <motion.div
           key="landing"
-          initial={{ opacity: 1 }}
-          exit={{ opacity: 0, scale: 1.03 }}
-          transition={{ duration: 0.7, ease: 'easeInOut' }}
-          className="fixed inset-0 z-[200] bg-[#020d0c] overflow-y-auto overflow-x-hidden"
-          style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, filter: 'blur(20px)', scale: 1.05 }}
+          transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            background: '#04040a',
+            overflowY: 'auto', overflowX: 'hidden',
+            fontFamily: FONT_BODY,
+            color: '#fff',
+          }}
         >
-          <GridBackground />
+          <GradientMesh />
+          <Scanlines />
+          <FloatingPixels />
 
-          {/* Ambient radial glow */}
-          <div
-            className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] pointer-events-none"
-            style={{
-              background: 'radial-gradient(ellipse at center top, rgba(20,184,166,0.12) 0%, transparent 70%)',
-            }}
-          />
-
-          {/* ─── NAVBAR ─── */}
-          <nav className="sticky top-0 z-50 flex items-center justify-between px-8 py-4 border-b border-white/[0.04] bg-[#020d0c]/80 backdrop-blur-xl">
+          {/* ── NAVBAR ──────────────────────────────────── */}
+          <nav style={{
+            position: 'sticky', top: 0, zIndex: 60,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '16px 32px',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            background: 'rgba(4,4,10,0.8)',
+            backdropFilter: 'blur(24px)',
+          }}>
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5 }}
-              className="flex items-center gap-2"
+              style={{ display: 'flex', alignItems: 'center', gap: 12 }}
             >
-              {/* Cross icon */}
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <rect x="8.5" y="2" width="3" height="16" rx="1.5" fill="#2dd4bf" />
-                <rect x="2" y="8.5" width="16" height="3" rx="1.5" fill="#2dd4bf" />
-              </svg>
-              <span className="text-base font-bold tracking-[0.15em] text-white font-mono">
+              <motion.img
+                src="/assets/pixel_robot.png" alt="SurgeonAI"
+                style={{ width: 36, height: 36, borderRadius: 10, boxShadow: '0 0 20px rgba(45,212,191,0.4)' }}
+                animate={{ rotate: [0, 5, -5, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+              />
+              <span style={{ fontFamily: FONT_PIXEL, fontSize: 14, fontWeight: 'normal', letterSpacing: '0.05em' }}>
                 SURGEON<span style={{ color: '#2dd4bf' }}>AI</span>
               </span>
             </motion.div>
@@ -166,311 +257,484 @@ export default function LandingPage({ onEnter }) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.3 }}
-              className="flex items-center gap-2"
             >
-              <div className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
-              <span className="text-[10px] font-mono tracking-[0.3em] text-teal-400/70 uppercase">Live Demo Active</span>
+              <a
+                href="https://github.com/Faiz-k490/surgeai"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 18px', borderRadius: 12,
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  background: 'rgba(255,255,255,0.02)',
+                  color: 'rgba(255,255,255,0.7)',
+                  fontSize: 10, fontWeight: 600, fontFamily: FONT_PIXEL,
+                  textDecoration: 'none',
+                  transition: 'all 0.3s ease',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#a78bfa'; e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; }}
+              >
+                GITHUB
+              </a>
             </motion.div>
           </nav>
 
-          {/* ─── HERO ─── */}
-          <section className="relative flex flex-col items-center justify-center min-h-[90vh] px-6 text-center pt-12 pb-8">
-            {/* ECG line header decoration */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="w-full max-w-md mb-8"
-            >
-              <ECGLine className="w-full h-12 opacity-60" />
-            </motion.div>
-
-            {/* Tag pill */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="inline-flex items-center gap-2 rounded-full border border-teal-500/25 bg-teal-500/5 px-4 py-1.5 mb-8"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
-              <span className="text-xs font-mono tracking-[0.25em] text-teal-400 uppercase">
-                Google Cloud × MLH Hackathon Build
-              </span>
-            </motion.div>
-
-            {/* Hero headline */}
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4, duration: 0.7 }}
-              className="text-5xl sm:text-7xl font-bold leading-[1.1] tracking-tight text-white max-w-4xl mb-6"
-            >
-              The{' '}
-              <span
-                className="relative"
+          {/* ── HERO ────────────────────────────────────── */}
+          <section style={{
+            position: 'relative',
+            display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center',
+            minHeight: '90vh',
+            padding: '64px 32px',
+            gap: 60,
+          }}>
+            {/* Left text */}
+            <div style={{ flex: '1 1 480px', maxWidth: 680, zIndex: 10 }}>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2 }}
                 style={{
-                  color: '#2dd4bf',
-                  textShadow: '0 0 60px rgba(45,212,191,0.4)',
+                  display: 'inline-flex', alignItems: 'center', gap: 10,
+                  padding: '8px 16px', borderRadius: 100, marginBottom: 32,
+                  border: '1px solid rgba(167,139,250,0.3)',
+                  background: 'linear-gradient(90deg, rgba(167,139,250,0.1), rgba(45,212,191,0.1))',
+                  boxShadow: '0 0 20px rgba(167,139,250,0.1)',
                 }}
               >
-                surgical training
-              </span>
-              {' '}gap is a crisis.
-            </motion.h1>
+                <span style={{ fontSize: 14 }}>🏆</span>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: '#c4b5fd', textTransform: 'uppercase', fontFamily: FONT_PIXEL }}>
+                  HACKATHON WINNER
+                </span>
+              </motion.div>
 
-            <motion.p
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.55, duration: 0.7 }}
-              className="text-base sm:text-lg text-white/40 max-w-2xl mx-auto leading-relaxed mb-12"
-            >
-              There are far more surgical trainees than there are qualified trainers to guide them.
-              Rotations are limited, repetitions are scarce, and patients pay the price.
-              <br className="hidden sm:block" />
-              <strong className="text-white/70"> SurgeonAI closes that gap — in real time.</strong>
-            </motion.p>
+              <motion.h1
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.7 }}
+                style={{
+                  fontFamily: FONT_HEADING, fontSize: 'clamp(40px, 6vw, 84px)',
+                  fontWeight: 900, lineHeight: 1.05,
+                  letterSpacing: '-0.03em',
+                  marginBottom: 28,
+                }}
+              >
+                Surgeons need{' '}
+                <GlitchText color1="#a78bfa" color2="#2dd4bf"><span style={{ color: '#2dd4bf' }}>practice.</span></GlitchText>
+                <br />
+                <span style={{ background: 'linear-gradient(90deg, #fff 0%, rgba(255,255,255,0.4) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                  Not enough trainers.
+                </span>
+              </motion.h1>
 
-            {/* CTA */}
-            <motion.button
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.7, type: 'spring', stiffness: 200 }}
-              whileHover={{ scale: 1.04, boxShadow: '0 0 40px rgba(45,212,191,0.3)' }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleEnter}
-              className="relative px-10 py-4 rounded-2xl font-mono font-semibold text-sm tracking-[0.2em] uppercase text-black cursor-pointer"
-              style={{
-                background: 'linear-gradient(135deg, #2dd4bf 0%, #14b8a6 100%)',
-                boxShadow: '0 0 20px rgba(45,212,191,0.2)',
-              }}
-            >
-              Launch Demo System
-              <span className="ml-3 opacity-70">→</span>
-            </motion.button>
+              {/* Terminal-typewriter subtitle */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                style={{
+                  borderRadius: 16, border: '1px solid rgba(45,212,191,0.2)',
+                  background: 'rgba(8,8,13,0.4)',
+                  backdropFilter: 'blur(8px)',
+                  padding: '18px 24px', marginBottom: 40,
+                  fontFamily: FONT_BODY,
+                  fontSize: 16, borderLeft: '4px solid #2dd4bf',
+                }}
+              >
+                <span style={{ color: 'rgba(255,255,255,0.3)', marginRight: 10 }}>&gt;</span>
+                <span style={{ color: '#2dd4bf', fontWeight: 500 }}>
+                  <TypeWriter text="Augmented intelligence bridging the gap between theory and the operating room..." delay={1000} speed={30} />
+                </span>
+              </motion.div>
 
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.3 }}
-              transition={{ delay: 1 }}
-              className="mt-4 text-[10px] font-mono tracking-widest text-white/30 uppercase"
+              {/* Main CTA */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.8 }}
+                style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}
+              >
+                <motion.button
+                  whileHover={{ scale: 1.05, boxShadow: '0 0 60px rgba(45,212,191,0.5)' }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleEnter}
+                  style={{
+                    padding: '20px 48px', borderRadius: 16, border: 'none',
+                    fontFamily: FONT_PIXEL, fontWeight: 'normal',
+                    fontSize: 13, letterSpacing: '0.05em',
+                    color: '#04040a', cursor: 'pointer',
+                    background: 'linear-gradient(135deg, #2dd4bf 0%, #a78bfa 100%)',
+                    boxShadow: '0 8px 32px rgba(45,212,191,0.3)',
+                    transition: 'box-shadow 0.3s ease',
+                  }}
+                >
+                  LAUNCH DEMO
+                </motion.button>
+              </motion.div>
+            </div>
+
+            {/* Right: Mega Icon Section */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, rotate: -3 }}
+              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+              transition={{ delay: 0.5, type: 'spring', stiffness: 100 }}
+              style={{ flexShrink: 0, position: 'relative' }}
             >
-              Requires camera access · Scalpel required for Phase 3+
-            </motion.p>
+              <div style={{
+                position: 'absolute', inset: -40,
+                background: 'radial-gradient(circle, rgba(45,212,191,0.2) 0%, transparent 70%)',
+                filter: 'blur(40px)', zIndex: 0,
+              }} />
+              <motion.img
+                src="/assets/pixel_robot.png"
+                alt="SurgeonAI Robot"
+                style={{
+                  width: 340, height: 340, borderRadius: 32,
+                  border: '4px solid rgba(255,255,255,0.1)',
+                  boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+                  position: 'relative', zIndex: 1,
+                }}
+                animate={{ y: [0, -15, 0] }}
+                transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+              />
+              <motion.div
+                style={{
+                  position: 'absolute', bottom: -15, right: -15, borderRadius: 16,
+                  border: '1px solid rgba(167,139,250,0.4)',
+                  background: 'rgba(4,4,10,0.95)',
+                  backdropFilter: 'blur(12px)',
+                  padding: '12px 20px', zIndex: 2,
+                  boxShadow: '0 8px 20px rgba(0,0,0,0.4)',
+                }}
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', letterSpacing: '0.1em', fontFamily: FONT_PIXEL }}>
+                  VER 0.8.0
+                </span>
+              </motion.div>
+            </motion.div>
           </section>
 
-          {/* ─── STATS ─── */}
-          <section className="relative px-6 pb-24 flex flex-col items-center">
-            <div className="w-full max-w-5xl grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <StatCard number={1200} suffix="+" label="Surgical residents in the US training annually" delay={0} />
-              <StatCard number={5} suffix="x" label="More trainees than senior consultant slots" delay={0.1} />
-              <StatCard number={40} suffix="%" label="Reported insufficient hands-on training time" delay={0.2} />
-              <StatCard number={0} suffix="ms" label="Reaction delay with SurgeonAI real-time feedback" delay={0.3} />
+          {/* ── STATS BAR (Integrated) ─────────────────── */}
+          <section style={{
+            margin: '0 32px', borderRadius: 32,
+            background: 'linear-gradient(90deg, rgba(45,212,191,0.05), rgba(167,139,250,0.05))',
+            border: '1px solid rgba(255,255,255,0.06)',
+            padding: '48px 32px',
+          }}>
+            <div style={{ maxWidth: 1080, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 40, textAlign: 'center' }}>
+              {[
+                { n: 10, s: ' Residents', label: 'Per Supervising Surgeon', color: '#f87171' },
+                { n: 85, s: '%', label: 'Trainees Request More Lab Access', color: '#60a5fa' },
+                { n: 6, s: ' Stages', label: 'Procedural Protocol AI', color: '#2dd4bf' },
+                { n: 33, s: 'ms', label: 'CV Loop Latency (Ultra-Low)', color: '#c084fc' },
+              ].map(({ n, s, label, color }, i) => (
+                <motion.div
+                  key={label}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                >
+                  <div style={{ fontFamily: FONT_HEADING, fontSize: 48, fontWeight: 900, color: color, marginBottom: 8, textShadow: `0 0 30px ${color}44` }}>
+                    <CountUp to={n} suffix={s} />
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', color: 'rgba(255,255,255,0.4)', fontFamily: FONT_PIXEL }}>
+                    {label}
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </section>
 
-          {/* ─── PROBLEM ─── */}
-          <section className="relative px-6 pb-24 flex flex-col items-center">
-            <div className="w-full max-w-5xl">
+          {/* ── THE PROBLEM (Integrated visuals) ───────── */}
+          <section style={{ padding: '120px 32px', position: 'relative' }}>
+            <div style={{ maxWidth: 1120, margin: '0 auto' }}>
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
                 viewport={{ once: true }}
-                className="text-center mb-14"
+                style={{ marginBottom: 64, textAlign: 'center' }}
               >
-                <p className="text-xs font-mono tracking-[0.4em] text-teal-500/60 uppercase mb-3">The Problem</p>
-                <h2 className="text-3xl sm:text-4xl font-bold text-white max-w-2xl mx-auto leading-snug">
-                  Surgical skill is built through repetition.
-                  <span className="text-white/35"> Repetition is not available.</span>
+                <div style={{
+                  display: 'inline-block', padding: '6px 16px', borderRadius: 100,
+                  background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)',
+                  color: '#f87171', fontSize: 10, fontFamily: FONT_PIXEL, marginBottom: 20,
+                }}>
+                  CRITICAL FAILURE
+                </div>
+                <h2 style={{ fontFamily: FONT_HEADING, fontSize: 'clamp(32px, 5vw, 60px)', fontWeight: 900, lineHeight: 1.1 }}>
+                  Surgical training is <span style={{ color: '#f87171' }}>obsolete.</span>
                 </h2>
               </motion.div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <ProblemCard
-                  icon="🏥"
-                  title="Training Bottleneck"
-                  body="One attending consultant supervises 5–10 residents simultaneously. Real hands-on guidance becomes impractical, rushed, or skipped entirely during high-pressure rotations."
-                  delay={0}
-                />
-                <ProblemCard
-                  icon="⏱️"
-                  title="Limited Rotations"
-                  body="OR slots are competitive. Trainees average just a fraction of the autonomous surgical time needed to build genuine procedural competence before practising on real patients."
-                  delay={0.1}
-                />
-                <ProblemCard
-                  icon="📉"
-                  title="No Objective Feedback"
-                  body="Existing simulation labs lack real-time haptic and angular precision feedback. Trainees cannot measure whether their technique is deviating from the optimal incision geometry."
-                  delay={0.2}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 32 }}>
+                {[
+                  { img: '/assets/pixel_hospital.png', title: 'TRAINER SHORTAGE', body: 'One attending consultant supervises 5–10 residents. Real hands-on guidance becomes rushed or skipped entirely.', color: '#f87171' },
+                  { img: '/assets/pixel_hourglass.png', title: 'LIMITED OR TIME', body: 'Trainees average a fraction of the autonomous hours needed. OR slots are competitive and scarce.', color: '#fb923c' },
+                  { img: '/assets/pixel_nodata.png', title: 'ZERO FEEDBACK', body: 'No precision metrics. Trainees cannot measure whether their technique deviates from optimal geometry.', color: '#facc15' },
+                ].map(({ img, title, body, color }, i) => (
+                  <motion.div
+                    key={title}
+                    initial={{ opacity: 0, y: 40 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.15 }}
+                    style={{
+                      borderRadius: 24, overflow: 'hidden',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      background: 'rgba(255,255,255,0.02)',
+                      transition: 'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+                    }}
+                    whileHover={{ scale: 1.02, borderColor: `${color}66`, background: 'rgba(255,255,255,0.04)' }}
+                  >
+                    <div style={{ position: 'relative' }}>
+                      <img src={img} alt={title} style={{ width: '100%', height: 240, objectFit: 'cover' }} />
+                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, background: 'linear-gradient(to top, rgba(4,4,10,1), transparent)' }} />
+                    </div>
+                    <div style={{ padding: '24px 28px 32px' }}>
+                      <h3 style={{ fontFamily: FONT_PIXEL, fontSize: 13, color: color, marginBottom: 16 }}>{title}</h3>
+                      <p style={{ fontSize: 15, lineHeight: 1.7, color: 'rgba(255,255,255,0.4)', fontWeight: 400 }}>{body}</p>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             </div>
           </section>
 
-          {/* ─── SOLUTION ─── */}
-          <section className="relative px-6 pb-32 flex flex-col items-center">
-            <div className="w-full max-w-5xl">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="text-center mb-14"
-              >
-                <p className="text-xs font-mono tracking-[0.4em] text-teal-500/60 uppercase mb-3">The Solution</p>
-                <h2 className="text-3xl sm:text-4xl font-bold text-white max-w-2xl mx-auto leading-snug">
-                  An AI trainer that never
-                  <span style={{ color: '#2dd4bf' }}> leaves the OR.</span>
-                </h2>
-                <p className="mt-4 text-white/35 max-w-xl mx-auto text-sm leading-relaxed">
-                  SurgeonAI uses a live camera, a real scalpel, and a computer-vision state machine to
-                  guide trainees through precise surgical procedures — measuring every angle, flagging every deviation.
-                </p>
-              </motion.div>
+          {/* ── THE SOLUTION (Full Color Integration) ───── */}
+          <section style={{ padding: '120px 32px', position: 'relative', background: 'rgba(45,212,191,0.02)' }}>
+            <div style={{ maxWidth: 1120, margin: '0 auto' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 64, alignItems: 'center' }}>
+                <div style={{ flex: '1 1 480px' }}>
+                  <div style={{
+                    display: 'inline-block', padding: '6px 16px', borderRadius: 100,
+                    background: 'rgba(45,212,191,0.1)', border: '1px solid rgba(45,212,191,0.3)',
+                    color: '#2dd4bf', fontSize: 10, fontFamily: FONT_PIXEL, marginBottom: 24,
+                  }}>
+                    SYSTEM UPGRADE
+                  </div>
+                  <h2 style={{ fontFamily: FONT_HEADING, fontSize: 'clamp(32px, 5vw, 56px)', fontWeight: 900, lineHeight: 1.1, marginBottom: 24 }}>
+                    An AI mentor that<br />
+                    <span style={{ color: '#2dd4bf' }}>never closes</span> its eyes.
+                  </h2>
+                  <p style={{ fontSize: 18, lineHeight: 1.7, color: 'rgba(255,255,255,0.5)', marginBottom: 48 }}>
+                    SurgeonAI bridges the gap with a hyper-accurate computer-vision pipeline that monitors, measures, and coaches in real time.
+                  </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 items-start">
-                {/* Feature list */}
-                <div className="flex flex-col gap-5">
-                  {[
-                    { label: 'Real-Time Angle Tracking', desc: 'Computer vision measures your scalpel approach angle frame-by-frame against the ideal 30–60° incision vector.' },
-                    { label: 'AI Voice Coaching', desc: 'ElevenLabs TTS issues live verbal guidance — just like a senior surgeon whispering in your ear.' },
-                    { label: 'Phase-Locked State Machine', desc: 'A rigid 6-phase protocol ensures trainees follow correct procedural sequence, not just technique.' },
-                    { label: 'Zero Hardware Required', desc: 'No AR headset. No haptic gloves. Just a camera, a scalpel, and SurgeonAI.' },
-                  ].map(({ label, desc }, i) => (
-                    <motion.div
-                      key={label}
-                      initial={{ opacity: 0, x: -20 }}
-                      whileInView={{ opacity: 1, x: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: i * 0.08 }}
-                      className="flex gap-4 items-start"
-                    >
-                      <div
-                        className="mt-1 w-5 h-5 rounded-full shrink-0 flex items-center justify-center"
-                        style={{ background: 'rgba(45,212,191,0.12)', border: '1px solid rgba(45,212,191,0.25)' }}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+                    {[
+                      { icon: '🎯', label: 'PRECISE METRICS', desc: 'Real-time angle tracking against 30–60° ideal vector.', color: '#2dd4bf' },
+                      { icon: '🔊', label: 'VOICE GUIDANCE', desc: 'ElevenLabs AI feedback directly into your headset.', color: '#a78bfa' },
+                      { icon: '🧬', label: 'PHASE PROTOCOL', desc: '6-stage state machine ensures total procedure safety.', color: '#f472b6' },
+                      { icon: '🛰️', label: 'EDGE PROCESSING', desc: 'Ultralytics YOLOv8 loops at 30fps with 0ms delay.', color: '#3b82f6' },
+                    ].map((feat, i) => (
+                      <motion.div
+                        key={feat.label}
+                        initial={{ opacity: 0, x: -20 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: i * 0.1 }}
+                        style={{ display: 'flex', gap: 20, alignItems: 'start' }}
                       >
-                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                          <path d="M2 5l2.5 2.5L8 2.5" stroke="#2dd4bf" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-white/80 mb-1">{label}</p>
-                        <p className="text-xs text-white/35 leading-relaxed">{desc}</p>
-                      </div>
-                    </motion.div>
-                  ))}
+                        <div style={{
+                          width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: `${feat.color}15`, border: `1px solid ${feat.color}33`, fontSize: 24, boxShadow: `0 0 20px ${feat.color}11`
+                        }}>
+                          {feat.icon}
+                        </div>
+                        <div>
+                          <h4 style={{ fontFamily: FONT_PIXEL, fontSize: 11, color: feat.color, marginBottom: 6 }}>{feat.label}</h4>
+                          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.3)', lineHeight: 1.6 }}>{feat.desc}</p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Phase timeline */}
                 <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true }}
-                  transition={{ duration: 0.6 }}
-                  className="rounded-2xl border border-white/[0.06] bg-white/[0.015] backdrop-blur-sm p-6"
+                  style={{ flex: '1 1 400px', maxWidth: 500, position: 'relative' }}
                 >
-                  <p className="text-[10px] font-mono tracking-[0.35em] text-teal-500/50 uppercase mb-5">6-Phase Protocol</p>
-                  <div className="flex flex-col gap-3">
-                    {[
-                      ['Phase 0', 'Idle', 'Scanning environment'],
-                      ['Phase 1', 'Target Acquired', 'Tissue site identified'],
-                      ['Phase 2', 'Tool Tracking', 'Scalpel in hand detected'],
-                      ['Phase 3', 'Incision', 'Live angle feedback active'],
-                      ['Phase 4', 'Clamping', 'Hemostasis protocol'],
-                      ['Phase 5', 'Complete', 'Procedure successful'],
-                    ].map(([phase, name, desc], i) => (
-                      <div key={phase} className="flex items-center gap-3">
-                        <div
-                          className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-[10px] font-mono font-bold"
-                          style={{
-                            background: i === 3 ? 'rgba(45,212,191,0.15)' : 'rgba(255,255,255,0.03)',
-                            border: `1px solid ${i === 3 ? 'rgba(45,212,191,0.3)' : 'rgba(255,255,255,0.06)'}`,
-                            color: i === 3 ? '#2dd4bf' : 'rgba(255,255,255,0.3)',
-                          }}
-                        >
-                          {i}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-medium truncate ${i === 3 ? 'text-teal-300' : 'text-white/50'}`}>
-                            {name}
-                          </p>
-                          <p className="text-[10px] text-white/20 truncate">{desc}</p>
-                        </div>
-                        {i < 5 && (
-                          <div className="w-px h-3 bg-white/10 self-end -mb-3 ml-4 absolute" style={{ display: 'none' }} />
-                        )}
-                      </div>
-                    ))}
+                  <div style={{ position: 'absolute', inset: -30, background: 'radial-gradient(circle, rgba(167,139,250,0.15), transparent 70%)', filter: 'blur(30px)', zIndex: 0 }} />
+                  <img
+                    src="/assets/pixel_medical.png"
+                    alt="System Icons"
+                    style={{
+                      width: '100%', borderRadius: 32, border: '1px solid rgba(255,255,255,0.1)',
+                      boxShadow: '0 30px 60px rgba(0,0,0,0.6)', position: 'relative', zIndex: 1,
+                    }}
+                  />
+                  <div style={{
+                    position: 'absolute', top: 20, right: 20, zIndex: 2,
+                    padding: '8px 14px', borderRadius: 8, background: '#04040a', border: '1px solid rgba(255,255,255,0.1)',
+                    fontFamily: FONT_PIXEL, fontSize: 8, color: '#2dd4bf',
+                  }}>
+                    SPRITE_PK_v4
                   </div>
                 </motion.div>
               </div>
             </div>
           </section>
 
-          {/* ─── FOOTER CTA ─── */}
-          <section className="relative px-6 pb-24 flex flex-col items-center text-center border-t border-white/[0.04]">
-            <div className="w-full max-w-2xl pt-20">
+          {/* ── BUILT WITH (Colorful Badges) ────────────── */}
+          <section style={{ padding: '80px 32px', textAlign: 'center' }}>
+            <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+              <h2 style={{ fontFamily: FONT_PIXEL, fontSize: 12, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.4em', marginBottom: 48 }}>
+                BUILT WITH
+              </h2>
+              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 14 }}>
+                {TECH_STACK.map((tech, i) => (
+                  <motion.a
+                    key={tech.name}
+                    href={tech.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.05 }}
+                    style={{
+                      padding: '12px 24px', borderRadius: 14,
+                      background: 'rgba(255,255,255,0.02)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      fontFamily: FONT_HEADING, fontWeight: 700, fontSize: 13,
+                      color: 'rgba(255,255,255,0.4)', textDecoration: 'none',
+                      transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = `${tech.color}15`;
+                      e.currentTarget.style.borderColor = `${tech.color}55`;
+                      e.currentTarget.style.color = '#fff';
+                      e.currentTarget.style.transform = 'translateY(-4px)';
+                      e.currentTarget.style.boxShadow = `0 10px 40px ${tech.color}22`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                      e.currentTarget.style.color = 'rgba(255,255,255,0.4)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    {tech.name}
+                  </motion.a>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* ── FOOTER CTA (Colorful) ───────────────────── */}
+          <section style={{ padding: '120px 32px 160px', textAlign: 'center', position: 'relative' }}>
+            {/* Mega glow */}
+            <div style={{
+              position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+              width: '100%', height: '100%', background: 'radial-gradient(circle, rgba(167,139,250,0.08) 0%, transparent 60%)',
+              pointerEvents: 'none',
+            }} />
+
+            <div style={{ maxWidth: 800, margin: '0 auto', position: 'relative', zIndex: 1 }}>
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
               >
-                <ECGLine className="w-full h-10 opacity-40 mb-8" />
-                <h2 className="text-3xl font-bold text-white mb-4">
-                  Ready to train the next generation of surgeons?
+                <motion.img
+                  src="/assets/pixel_robot.png" alt=""
+                  style={{ width: 100, height: 100, margin: '0 auto 32px', borderRadius: 24, boxShadow: '0 0 40px rgba(167,139,250,0.4)' }}
+                  animate={{ y: [0, -10, 0] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                />
+                <h2 style={{ fontFamily: FONT_HEADING, fontSize: 'clamp(36px, 6vw, 72px)', fontWeight: 900, marginBottom: 20 }}>
+                  Ready to <GlitchText color1="#2dd4bf" color2="#f472b6"><span style={{ color: '#2dd4bf' }}>operate?</span></GlitchText>
                 </h2>
-                <p className="text-sm text-white/35 mb-8">
-                  The demo is live. Pick up your scalpel.
+                <p style={{ fontSize: 20, color: 'rgba(255,255,255,0.4)', marginBottom: 48, maxWidth: 500, marginInline: 'auto' }}>
+                  The surgical theater of the future is open. Access the HUD now.
                 </p>
+
                 <motion.button
-                  whileHover={{ scale: 1.03, boxShadow: '0 0 50px rgba(45,212,191,0.3)' }}
-                  whileTap={{ scale: 0.97 }}
+                  whileHover={{ scale: 1.05, boxShadow: '0 0 80px rgba(45,212,191,0.6)' }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={handleEnter}
-                  className="px-10 py-4 rounded-2xl font-mono font-semibold text-sm tracking-[0.2em] uppercase text-black cursor-pointer"
-                  style={{ background: 'linear-gradient(135deg, #2dd4bf 0%, #14b8a6 100%)' }}
+                  style={{
+                    padding: '24px 64px', borderRadius: 20, border: 'none',
+                    fontFamily: FONT_PIXEL, fontWeight: 'normal',
+                    fontSize: 16, letterSpacing: '0.05em',
+                    color: '#04040a', cursor: 'pointer',
+                    background: 'linear-gradient(135deg, #2dd4bf 0%, #a78bfa 100%)',
+                    boxShadow: '0 10px 40px rgba(45,212,191,0.4)',
+                  }}
                 >
-                  Enter SurgeonAI →
+                  ENTER HUD
                 </motion.button>
               </motion.div>
             </div>
           </section>
 
-          {/* Footer */}
-          <div className="pb-8 text-center">
-            <p className="text-[10px] font-mono tracking-widest text-white/15 uppercase">
-              SurgeonAI · Built at Google Cloud × MLH Hackathon · v0.1.0
-            </p>
-          </div>
+          {/* ── FOOTER CREDITS (Premium) ────────────────── */}
+          <footer style={{
+            padding: '48px 32px',
+            borderTop: '1px solid rgba(255,255,255,0.06)',
+            textAlign: 'center', background: 'rgba(0,0,0,0.2)',
+          }}>
+            <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+              <p style={{ fontFamily: FONT_PIXEL, fontSize: 8, color: 'rgba(255,255,255,0.15)', letterSpacing: '0.2em', marginBottom: 24 }}>
+                DESIGNED & ENGINEERED FOR THE FUTURE OF MEDICINE
+              </p>
+              <p style={{ fontFamily: FONT_BODY, fontSize: 15, color: 'rgba(255,255,255,0.3)', marginBottom: 8 }}>
+                Built by <span style={{ color: '#2dd4bf', fontWeight: 600 }}>Faizan Khan</span> · <span style={{ color: '#a78bfa', fontWeight: 600 }}>Rabuor Tindi</span> · <span style={{ color: '#f472b6', fontWeight: 600 }}>Suess Luna</span>
+              </p>
+              <div style={{ height: 1, width: 60, background: 'rgba(255,255,255,0.1)', margin: '24px auto' }} />
+              <p style={{ fontFamily: FONT_PIXEL, fontSize: 8, color: 'rgba(255,255,255,0.1)', letterSpacing: '0.5em' }}>
+                SURGEONAI © 2026. ALL RIGHTS RESERVED.
+              </p>
+            </div>
+          </footer>
         </motion.div>
       ) : (
+        /* ── Transition screen ── */
         <motion.div
           key="transition"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[200] bg-black flex items-center justify-center"
-          transition={{ duration: 0.4 }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 300,
+            background: '#04040a',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
         >
+          <Scanlines />
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col items-center gap-4"
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 32 }}
           >
-            <div className="w-64 h-[2px] bg-white/5 rounded-full overflow-hidden">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+              style={{ padding: 4, borderRadius: '50%', background: 'linear-gradient(45deg, #2dd4bf, #a78bfa)' }}
+            >
+              <img src="/assets/pixel_robot.png" alt="" style={{ width: 80, height: 80, borderRadius: '50%' }} />
+            </motion.div>
+            <div style={{ width: 200, height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}>
               <motion.div
                 initial={{ width: '0%' }}
                 animate={{ width: '100%' }}
-                transition={{ duration: 0.7, ease: 'easeInOut' }}
-                className="h-full rounded-full"
-                style={{ background: 'linear-gradient(90deg, #14b8a6, #2dd4bf)' }}
+                transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+                style={{ height: '100%', borderRadius: 99, background: 'linear-gradient(90deg, #2dd4bf, #a78bfa)' }}
               />
             </div>
             <motion.p
-              animate={{ opacity: [0.3, 0.9, 0.3] }}
-              transition={{ duration: 1.2, repeat: Infinity }}
-              className="text-xs font-mono tracking-[0.35em] uppercase"
-              style={{ color: '#2dd4bf' }}
+              fontFamily={FONT_PIXEL}
+              animate={{ opacity: [0.4, 1, 0.4] }}
+              transition={{ duration: 1, repeat: Infinity }}
+              style={{ fontSize: 10, letterSpacing: '0.4em', color: '#2dd4bf' }}
             >
-              Initialising SurgeonAI
+              INITIATING...
             </motion.p>
           </motion.div>
         </motion.div>
