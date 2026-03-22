@@ -71,158 +71,13 @@ def pt_distance(p1, p2):
     return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
 
-def scalpel_angle_from_contour(frame, bbox_xyxy):
-    """True blade-axis angle via edge-PCA inside the scalpel bbox.
-    The scalpel is a right-triangle blade — bbox aspect ratio is useless.
-    Instead we run Canny inside the bbox, collect edge pixels, and use PCA
-    to find the dominant axis.  Falls back to minAreaRect on dark-mask pixels
-    if edges are too sparse.
-    Returns angle in degrees: 0 = horizontal, 90 = vertical.
-    """
-    try:
-        x1, y1, x2, y2 = [int(v) for v in bbox_xyxy]
-        fh, fw = frame.shape[:2]
-        x1, y1 = max(0, x1), max(0, y1)
-        x2, y2 = min(fw, x2), min(fh, y2)
-        crop = frame[y1:y2, x1:x2]
-        if crop.size == 0:
-            return _bbox_fallback(bbox_xyxy)
-
-        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-
-        # ── Strategy 1: Canny edge PCA ────────────────────────────────────
-        edges = cv2.Canny(gray, 50, 150)
-        pts = np.column_stack(np.nonzero(edges))  # (row, col)
-        if pts.shape[0] >= 30:
-            mean, eigenvectors = cv2.PCACompute(pts.astype(np.float64), mean=None)
-            angle = math.degrees(math.atan2(eigenvectors[0, 1], eigenvectors[0, 0]))
-            return abs(angle) % 180
-
-        # ── Strategy 2: Dark-pixel minAreaRect ────────────────────────────
-        _, dark_mask = cv2.threshold(gray, 60, 255, cv2.THRESH_BINARY_INV)
-        contours, _ = cv2.findContours(dark_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if contours:
-            biggest = max(contours, key=cv2.contourArea)
-            if cv2.contourArea(biggest) > 50:
-                rect = cv2.minAreaRect(biggest)
-                _, size, angle = rect
-                if size[0] < size[1]:
-                    angle += 90
-                return abs(angle) % 180
-
-        return _bbox_fallback(bbox_xyxy)
-    except Exception:
-        return _bbox_fallback(bbox_xyxy)
-
-
-def _bbox_fallback(bbox_xyxy):
-    """Last resort: bbox aspect ratio."""
+def scalpel_angle_from_bbox(bbox_xyxy):
+    """Orientation from bbox aspect ratio. 0=horizontal, 90=vertical."""
     x1, y1, x2, y2 = bbox_xyxy
-    w, h = abs(x2 - x1), abs(y2 - y1)
+    w, h = x2 - x1, y2 - y1
     if w < 1 and h < 1:
         return 0.0
-    return math.degrees(math.atan2(h, w))
-
-
-# ── OpenCV: Color-Banded Scalpel Detection ────────────────────────────────────
-
-def detect_colored_scalpel(frame, exclude_bbox=None):
-    """Detect the color-banded scalpel handle + silver blade tip.
-
-    The scalpel has a colorful patterned handle (purple, yellow-green, cyan
-    bands on a dark base) and an exposed silver metal blade.  We combine:
-      1. High-saturation mask → catches the vivid colour bands
-      2. Silver/metallic mask → catches the blade tip (high V, low S)
-    Then find elongated contours (aspect ≥ 2.5) that are NOT the banana.
-
-    Returns {cid, conf, box, angle} or None.
-    """
-    try:
-        fh, fw = frame.shape[:2]
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        k = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-
-        # ── 1. Vivid colour bands (high saturation, decent brightness) ────
-        color_mask = cv2.inRange(hsv,
-                                 np.array([0, 80, 50]),
-                                 np.array([180, 255, 255]))
-
-        # ── 2. Silver / metallic blade (very low sat, high value) ─────────
-        silver_mask = cv2.inRange(hsv,
-                                  np.array([0, 0, 150]),
-                                  np.array([180, 50, 255]))
-
-        # ── Combine ───────────────────────────────────────────────────────
-        combined = cv2.bitwise_or(color_mask, silver_mask)
-
-        # Morphological cleanup — connect nearby bands into one blob
-        combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, k, iterations=4)
-        combined = cv2.morphologyEx(combined, cv2.MORPH_OPEN, k, iterations=1)
-
-        # ── Exclude banana region ─────────────────────────────────────────
-        if exclude_bbox is not None:
-            ex1, ey1, ex2, ey2 = [int(v) for v in exclude_bbox]
-            margin = 25
-            ex1, ey1 = max(0, ex1 - margin), max(0, ey1 - margin)
-            ex2, ey2 = min(fw, ex2 + margin), min(fh, ey2 + margin)
-            combined[ey1:ey2, ex1:ex2] = 0
-
-        # ── Find elongated contours ───────────────────────────────────────
-        contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL,
-                                       cv2.CHAIN_APPROX_SIMPLE)
-        if not contours:
-            return None
-
-        best = None
-        best_score = 0
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if area < 600:
-                continue
-            rect = cv2.minAreaRect(cnt)
-            _, (rw, rh), angle = rect
-            if rw < 1 or rh < 1:
-                continue
-            aspect = max(rw, rh) / min(rw, rh)
-            if aspect < 2.5:
-                continue
-
-            # Bonus: verify the contour contains multiple colour hues
-            # (banana is mono-hue ~25-35; scalpel has purple+green+yellow)
-            bx, by, bw, bh = cv2.boundingRect(cnt)
-            roi_hue = hsv[by:by+bh, bx:bx+bw, 0]
-            roi_sat = hsv[by:by+bh, bx:bx+bw, 1]
-            # Count pixels with saturation > 60 in distinct hue buckets
-            sat_px = roi_sat > 60
-            if sat_px.sum() > 20:
-                hue_vals = roi_hue[sat_px]
-                # Check how many of 6 hue buckets (0-30, 30-60, ..., 150-180) are hit
-                buckets_hit = 0
-                for lo in range(0, 180, 30):
-                    if np.any((hue_vals >= lo) & (hue_vals < lo + 30)):
-                        buckets_hit += 1
-                # Scalpel should hit at least 3 hue buckets (purple+green+yellow)
-                # Banana only hits 1-2 (yellow range)
-                if buckets_hit < 2:
-                    continue
-
-            score = area * aspect
-            if score > best_score:
-                best_score = score
-                if rw < rh:
-                    angle += 90
-                best = {
-                    "cid": KNIFE_ID,
-                    "conf": 0.75,
-                    "box": [float(bx), float(by), float(bx + bw), float(by + bh)],
-                    "angle": abs(angle) % 180,
-                    "_source": "opencv_color",
-                }
-
-        return best
-    except Exception as exc:
-        logger.debug("Colored scalpel detection failed: %s", exc)
-        return None
+    return math.degrees(math.atan2(abs(h), abs(w)))
 
 
 # ── OpenCV: Red Rectangle Detection ──────────────────────────────────────────
@@ -331,7 +186,7 @@ class DemoOrchestrator:
             return True
         return False
 
-    def process(self, detections, red_rect, fh, fw, frame=None):
+    def process(self, detections, red_rect, fh, fw):
         """Process one frame. Returns frame_state dict."""
         warning = None
         angle_data = None
@@ -384,8 +239,7 @@ class DemoOrchestrator:
         elif self.phase == 3:
             if knife and red_rect:
                 rcx, rcy, rangle, _ = red_rect
-                # Use pre-computed contour angle if available, else compute
-                s_angle = knife.get("angle") or scalpel_angle_from_contour(frame, knife["box"])
+                s_angle = scalpel_angle_from_bbox(knife["box"])
                 raw_diff = abs(s_angle - rangle)
                 if raw_diff > 90:
                     raw_diff = 180 - raw_diff
@@ -576,27 +430,7 @@ def vision_loop():
                     cid = int(r.boxes.cls[i].item())
                     conf = float(r.boxes.conf[i].item())
                     box = r.boxes.xyxy[i].tolist()
-                    det = {"cid": cid, "conf": conf, "box": box}
-                    # Pre-compute contour angle for scalpel
-                    if cid == KNIFE_ID:
-                        det["angle"] = scalpel_angle_from_contour(frame, box)
-                    detections.append(det)
-
-        # ── OpenCV black-scalpel fallback (Phase 1+) ──────────────────────
-        has_yolo_knife = any(d["cid"] == KNIFE_ID for d in detections)
-        if not has_yolo_knife and orchestrator.phase >= 1:
-            banana_det_for_exclude = next(
-                (d for d in detections if d["cid"] == BANANA_ID), None
-            )
-            exclude = banana_det_for_exclude["box"] if banana_det_for_exclude else None
-            cv_scalpel = detect_colored_scalpel(frame, exclude_bbox=exclude)
-            if cv_scalpel is not None:
-                detections.append(cv_scalpel)
-                logger.debug(
-                    "OpenCV scalpel fallback: angle=%.1f box=%s",
-                    cv_scalpel.get("angle", -1),
-                    cv_scalpel["box"],
-                )
+                    detections.append({"cid": cid, "conf": conf, "box": box})
 
         # ── Red rect detection (only when banana present) ─────────────────
         red_rect = None
@@ -605,7 +439,7 @@ def vision_loop():
             red_rect = detect_red_rectangle(frame, banana_det["box"])
 
         # ── DemoOrchestrator ──────────────────────────────────────────────
-        state = orchestrator.process(detections, red_rect, fh, fw, frame=frame)
+        state = orchestrator.process(detections, red_rect, fh, fw)
 
         # ── Metrics ───────────────────────────────────────────────────────
         dt = max(1e-6, time.time() - t0)
