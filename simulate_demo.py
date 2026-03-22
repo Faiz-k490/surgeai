@@ -22,6 +22,8 @@ try:
 except ImportError:
     YOLO_AVAILABLE = False
 
+from backend.app.vision.smart_crop import SmartCropper
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("surgeai.demo")
 
@@ -309,6 +311,11 @@ camera = None
 latest_frame = None
 latest_frame_lock = threading.Lock()
 
+# ── Smart crop state (shared between vision_loop and MJPEG generator) ─────────
+cropper = SmartCropper(jpeg_quality=80)
+latest_yolo_boxes: list = []
+latest_yolo_boxes_lock = threading.Lock()
+
 
 def open_camera():
     for idx in range(5):
@@ -349,15 +356,21 @@ def capture_thread():
 
 
 def generate_mjpeg():
-    """MJPEG generator for /video endpoint."""
+    """MJPEG generator for /video endpoint — streams 512x512 banana-zoomed crop."""
     while True:
         with latest_frame_lock:
             frame = latest_frame
         if frame is None:
             time.sleep(0.05)
             continue
-        _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
+        with latest_yolo_boxes_lock:
+            boxes = list(latest_yolo_boxes)
+        try:
+            jpeg = cropper.detect_and_crop(frame, boxes)
+        except Exception:
+            _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            jpeg = buf.tobytes()
+        yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n")
         time.sleep(0.033)  # ~30 fps mjpeg
 
 
@@ -431,6 +444,22 @@ def vision_loop():
                     conf = float(r.boxes.conf[i].item())
                     box = r.boxes.xyxy[i].tolist()
                     detections.append({"cid": cid, "conf": conf, "box": box})
+
+        # ── Publish normalized boxes for smart crop ───────────────────────
+        norm_boxes = []
+        for d in detections:
+            x1, y1, x2, y2 = d["box"]
+            norm_boxes.append({
+                "x": x1 / fw,
+                "y": y1 / fh,
+                "width": (x2 - x1) / fw,
+                "height": (y2 - y1) / fh,
+                "label": LABEL_MAP.get(d["cid"], "Unknown"),
+                "confidence": d["conf"],
+            })
+        with latest_yolo_boxes_lock:
+            latest_yolo_boxes.clear()
+            latest_yolo_boxes.extend(norm_boxes)
 
         # ── Red rect detection (only when banana present) ─────────────────
         red_rect = None
