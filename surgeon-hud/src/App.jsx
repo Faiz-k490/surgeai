@@ -191,6 +191,7 @@ function SurgeryComplete() {
 // ── App ────────────────────────────────────────────────────────────────────
 function App() {
   const isBooted = useHudStore((s) => s.isBooted);
+  const setBooted = useHudStore((s) => s.setBooted);
   const [showLanding, setShowLanding] = useState(true);
 
   return (
@@ -198,7 +199,10 @@ function App() {
       {/* Landing page — full-screen, shown until user clicks CTA */}
       <AnimatePresence>
         {showLanding && (
-          <LandingPage onEnter={() => setShowLanding(false)} />
+          <LandingPage onEnter={() => {
+            setShowLanding(false);
+            setBooted(true);
+          }} />
         )}
       </AnimatePresence>
 
@@ -206,9 +210,6 @@ function App() {
       {!showLanding && (
         <SocketManager>
           <main className="relative w-screen h-screen overflow-hidden bg-black">
-            {/* Z-100: Boot Sequence */}
-            <BootScreen />
-
             <AnimatePresence>
               {isBooted && (
                 <motion.div

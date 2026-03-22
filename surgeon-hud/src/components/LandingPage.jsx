@@ -2,79 +2,26 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   SurgeonAI — Landing Page v4 (SUPER COLORFUL + PIXEL FONT)
-   Pixel art + Outfit/Space Grotesk + Press Start 2P
+   SurgeonAI — Landing Page v3
+   Pixel art + Outfit/Space Grotesk fonts + clean hackathon design
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const FONT_HEADING = "'Outfit', sans-serif";
 const FONT_BODY = "'Space Grotesk', sans-serif";
-const FONT_PIXEL = "'Press Start 2P', cursive";
 
 // ── Tech stack with links ──────────────────────────────────────────────────
 const TECH_STACK = [
-  { name: 'YOLOv8', url: 'https://docs.ultralytics.com/', color: '#2dd4bf' },
-  { name: 'OpenCV', url: 'https://opencv.org/', color: '#3b82f6' },
-  { name: 'Flask', url: 'https://flask.palletsprojects.com/', color: '#f59e0b' },
-  { name: 'Socket.IO', url: 'https://socket.io/', color: '#a78bfa' },
-  { name: 'React', url: 'https://react.dev/', color: '#61dafb' },
-  { name: 'Vite', url: 'https://vitejs.dev/', color: '#ffbd00' },
-  { name: 'ElevenLabs', url: 'https://elevenlabs.io/', color: '#ec4899' },
-  { name: 'Google Cloud', url: 'https://cloud.google.com/', color: '#4285f4' },
-  { name: 'Snowflake', url: 'https://www.snowflake.com/', color: '#29b6f6' },
-  { name: 'MongoDB', url: 'https://www.mongodb.com/', color: '#4daf50' },
+  { name: 'YOLOv8', url: 'https://docs.ultralytics.com/' },
+  { name: 'OpenCV', url: 'https://opencv.org/' },
+  { name: 'Flask', url: 'https://flask.palletsprojects.com/' },
+  { name: 'Socket.IO', url: 'https://socket.io/' },
+  { name: 'React', url: 'https://react.dev/' },
+  { name: 'Vite', url: 'https://vitejs.dev/' },
+  { name: 'ElevenLabs', url: 'https://elevenlabs.io/' },
+  { name: 'Google Cloud', url: 'https://cloud.google.com/' },
+  { name: 'Snowflake', url: 'https://www.snowflake.com/' },
+  { name: 'MongoDB', url: 'https://www.mongodb.com/' },
 ];
-
-// ── Background Gradient Mesh ───────────────────────────────────────────────
-function GradientMesh() {
-  return (
-    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
-      {/* Cyan orb */}
-      <motion.div
-        animate={{
-          x: [0, 100, -50, 0],
-          y: [0, -150, 50, 0],
-          scale: [1, 1.2, 0.9, 1],
-        }}
-        transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-        style={{
-          position: 'absolute', top: '10%', left: '15%',
-          width: 600, height: 600, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(45,212,191,0.15) 0%, transparent 70%)',
-          filter: 'blur(80px)',
-        }}
-      />
-      {/* Purple orb */}
-      <motion.div
-        animate={{
-          x: [0, -120, 80, 0],
-          y: [0, 100, -100, 0],
-          scale: [1, 1.3, 0.8, 1],
-        }}
-        transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
-        style={{
-          position: 'absolute', bottom: '15%', right: '10%',
-          width: 700, height: 700, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(167,139,250,0.15) 0%, transparent 70%)',
-          filter: 'blur(100px)',
-        }}
-      />
-      {/* Pink orb */}
-      <motion.div
-        animate={{
-          x: [0, 50, -80, 0],
-          y: [0, 80, 120, 0],
-        }}
-        transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
-        style={{
-          position: 'absolute', top: '40%', left: '40%',
-          width: 500, height: 500, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(244,114,182,0.1) 0%, transparent 70%)',
-          filter: 'blur(120px)',
-        }}
-      />
-    </div>
-  );
-}
 
 // ── Pixel-style animated typing ────────────────────────────────────────────
 function TypeWriter({ text, delay = 0, speed = 35 }) {
@@ -104,17 +51,17 @@ function TypeWriter({ text, delay = 0, speed = 35 }) {
 
 // ── Floating pixel particles ───────────────────────────────────────────────
 function FloatingPixels() {
-  const pixels = Array.from({ length: 24 }, (_, i) => ({
+  const pixels = Array.from({ length: 18 }, (_, i) => ({
     id: i,
     left: `${Math.random() * 100}%`,
     delay: Math.random() * 6,
     duration: 6 + Math.random() * 10,
-    size: 2 + Math.floor(Math.random() * 4),
+    size: 2 + Math.floor(Math.random() * 3),
     color: ['#2dd4bf', '#a78bfa', '#f472b6', '#67e8f9'][Math.floor(Math.random() * 4)],
   }));
 
   return (
-    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 1 }}>
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
       {pixels.map((p) => (
         <motion.div
           key={p.id}
@@ -136,18 +83,18 @@ function FloatingPixels() {
 }
 
 // ── Glitch text ────────────────────────────────────────────────────────────
-function GlitchText({ children, color1 = '#a78bfa', color2 = '#2dd4bf' }) {
+function GlitchText({ children }) {
   return (
     <span style={{ position: 'relative', display: 'inline-block' }}>
       <span style={{ position: 'relative', zIndex: 1 }}>{children}</span>
       <motion.span
-        style={{ position: 'absolute', top: 0, left: 0, color: color1, clipPath: 'inset(0 0 65% 0)', zIndex: 0, opacity: 0.6 }}
+        style={{ position: 'absolute', top: 0, left: 0, color: '#a78bfa', clipPath: 'inset(0 0 65% 0)', zIndex: 0, opacity: 0.6 }}
         animate={{ x: [0, -2, 2, 0], y: [0, 1, -1, 0] }}
         transition={{ duration: 0.3, repeat: Infinity, repeatDelay: 4 }}
         aria-hidden
       >{children}</motion.span>
       <motion.span
-        style={{ position: 'absolute', top: 0, left: 0, color: color2, clipPath: 'inset(65% 0 0 0)', zIndex: 0, opacity: 0.6 }}
+        style={{ position: 'absolute', top: 0, left: 0, color: '#2dd4bf', clipPath: 'inset(65% 0 0 0)', zIndex: 0, opacity: 0.6 }}
         animate={{ x: [0, 2, -2, 0], y: [0, -1, 1, 0] }}
         transition={{ duration: 0.3, repeat: Infinity, repeatDelay: 4, delay: 0.05 }}
         aria-hidden
@@ -157,7 +104,7 @@ function GlitchText({ children, color1 = '#a78bfa', color2 = '#2dd4bf' }) {
 }
 
 // ── Animated counter ───────────────────────────────────────────────────────
-function CountUp({ to, suffix = '', duration = 1.5 }) {
+function CountUp({ to, suffix = '', duration = 2 }) {
   const [val, setVal] = useState(0);
   const ref = useRef(null);
   const [started, setStarted] = useState(false);
@@ -188,8 +135,8 @@ function Scanlines() {
   return (
     <div
       style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 100, opacity: 0.03,
-        backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.5) 2px, rgba(0,0,0,0.5) 4px)',
+        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 100, opacity: 0.025,
+        backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.4) 2px, rgba(0,0,0,0.4) 4px)',
       }}
     />
   );
@@ -212,19 +159,16 @@ export default function LandingPage({ onEnter }) {
       {!entering ? (
         <motion.div
           key="landing"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0, filter: 'blur(20px)', scale: 1.05 }}
-          transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+          exit={{ opacity: 0, filter: 'blur(14px)', scale: 1.04 }}
+          transition={{ duration: 0.8, ease: 'easeInOut' }}
           style={{
             position: 'fixed', inset: 0, zIndex: 200,
-            background: '#04040a',
+            background: '#08080d',
             overflowY: 'auto', overflowX: 'hidden',
             fontFamily: FONT_BODY,
             color: '#fff',
           }}
         >
-          <GradientMesh />
           <Scanlines />
           <FloatingPixels />
 
@@ -232,23 +176,18 @@ export default function LandingPage({ onEnter }) {
           <nav style={{
             position: 'sticky', top: 0, zIndex: 60,
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '16px 32px',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
-            background: 'rgba(4,4,10,0.8)',
-            backdropFilter: 'blur(24px)',
+            padding: '14px 32px',
+            borderBottom: '1px solid rgba(255,255,255,0.05)',
+            background: 'rgba(8,8,13,0.92)',
+            backdropFilter: 'blur(20px)',
           }}>
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              style={{ display: 'flex', alignItems: 'center', gap: 12 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 10 }}
             >
-              <motion.img
-                src="/assets/pixel_robot.png" alt="SurgeonAI"
-                style={{ width: 36, height: 36, borderRadius: 10, boxShadow: '0 0 20px rgba(45,212,191,0.4)' }}
-                animate={{ rotate: [0, 5, -5, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-              />
-              <span style={{ fontFamily: FONT_PIXEL, fontSize: 14, fontWeight: 'normal', letterSpacing: '0.05em' }}>
+              <img src="/assets/pixel_robot.png" alt="SurgeonAI" style={{ width: 32, height: 32, borderRadius: 8 }} />
+              <span style={{ fontFamily: FONT_HEADING, fontSize: 16, fontWeight: 800, letterSpacing: '0.12em' }}>
                 SURGEON<span style={{ color: '#2dd4bf' }}>AI</span>
               </span>
             </motion.div>
@@ -263,19 +202,18 @@ export default function LandingPage({ onEnter }) {
                 target="_blank"
                 rel="noreferrer"
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '8px 18px', borderRadius: 12,
-                  border: '1px solid rgba(255,255,255,0.12)',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 14px', borderRadius: 10,
+                  border: '1px solid rgba(255,255,255,0.08)',
                   background: 'rgba(255,255,255,0.02)',
-                  color: 'rgba(255,255,255,0.7)',
-                  fontSize: 10, fontWeight: 600, fontFamily: FONT_PIXEL,
-                  textDecoration: 'none',
+                  color: 'rgba(255,255,255,0.5)',
+                  fontSize: 11, fontWeight: 500, letterSpacing: '0.1em',
+                  textDecoration: 'none', textTransform: 'uppercase',
                   transition: 'all 0.3s ease',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#a78bfa'; e.currentTarget.style.color = '#fff'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; }}
               >
-                GITHUB
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
+                GitHub
               </a>
             </motion.div>
           </nav>
@@ -285,26 +223,25 @@ export default function LandingPage({ onEnter }) {
             position: 'relative',
             display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center',
             minHeight: '90vh',
-            padding: '64px 32px',
-            gap: 60,
+            padding: '48px 32px',
+            gap: 48,
           }}>
             {/* Left text */}
-            <div style={{ flex: '1 1 480px', maxWidth: 680, zIndex: 10 }}>
+            <div style={{ flex: '1 1 480px', maxWidth: 640, zIndex: 10 }}>
               <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 10,
-                  padding: '8px 16px', borderRadius: 100, marginBottom: 32,
-                  border: '1px solid rgba(167,139,250,0.3)',
-                  background: 'linear-gradient(90deg, rgba(167,139,250,0.1), rgba(45,212,191,0.1))',
-                  boxShadow: '0 0 20px rgba(167,139,250,0.1)',
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                  padding: '6px 14px', borderRadius: 10, marginBottom: 28,
+                  border: '1px solid rgba(167,139,250,0.2)',
+                  background: 'rgba(167,139,250,0.05)',
                 }}
               >
-                <span style={{ fontSize: 14 }}>🏆</span>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: '#c4b5fd', textTransform: 'uppercase', fontFamily: FONT_PIXEL }}>
-                  HACKATHON WINNER
+                <span style={{ fontSize: 12 }}>🏆</span>
+                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', color: '#c4b5fd', textTransform: 'uppercase' }}>
+                  Hackathon Project
                 </span>
               </motion.div>
 
@@ -313,123 +250,130 @@ export default function LandingPage({ onEnter }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3, duration: 0.7 }}
                 style={{
-                  fontFamily: FONT_HEADING, fontSize: 'clamp(40px, 6vw, 84px)',
-                  fontWeight: 900, lineHeight: 1.05,
-                  letterSpacing: '-0.03em',
-                  marginBottom: 28,
+                  fontFamily: FONT_HEADING, fontSize: 'clamp(36px, 5.5vw, 72px)',
+                  fontWeight: 900, lineHeight: 1.08,
+                  letterSpacing: '-0.02em',
+                  marginBottom: 24,
                 }}
               >
                 Surgeons need{' '}
-                <GlitchText color1="#a78bfa" color2="#2dd4bf"><span style={{ color: '#2dd4bf' }}>practice.</span></GlitchText>
+                <GlitchText><span style={{ color: '#2dd4bf' }}>practice.</span></GlitchText>
                 <br />
-                <span style={{ background: 'linear-gradient(90deg, #fff 0%, rgba(255,255,255,0.4) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                  Not enough trainers.
-                </span>
+                <span style={{ color: 'rgba(255,255,255,0.25)' }}>There aren't enough trainers.</span>
               </motion.h1>
 
-              {/* Terminal-typewriter subtitle */}
+              {/* Terminal style subtitle */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.6 }}
                 style={{
-                  borderRadius: 16, border: '1px solid rgba(45,212,191,0.2)',
-                  background: 'rgba(8,8,13,0.4)',
-                  backdropFilter: 'blur(8px)',
-                  padding: '18px 24px', marginBottom: 40,
-                  fontFamily: FONT_BODY,
-                  fontSize: 16, borderLeft: '4px solid #2dd4bf',
+                  borderRadius: 12, border: '1px solid rgba(255,255,255,0.06)',
+                  background: 'rgba(255,255,255,0.02)',
+                  padding: '14px 18px', marginBottom: 32,
+                  fontFamily: "'Space Grotesk', monospace",
+                  fontSize: 13, color: '#2dd4bf',
                 }}
               >
-                <span style={{ color: 'rgba(255,255,255,0.3)', marginRight: 10 }}>&gt;</span>
-                <span style={{ color: '#2dd4bf', fontWeight: 500 }}>
-                  <TypeWriter text="Augmented intelligence bridging the gap between theory and the operating room..." delay={1000} speed={30} />
-                </span>
+                <span style={{ color: 'rgba(255,255,255,0.25)' }}>$ </span>
+                <TypeWriter text="Real-time computer vision guides trainees through precise surgical incisions..." delay={800} speed={28} />
               </motion.div>
 
-              {/* Main CTA */}
+              {/* CTA */}
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.8 }}
-                style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}
+                style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}
               >
                 <motion.button
-                  whileHover={{ scale: 1.05, boxShadow: '0 0 60px rgba(45,212,191,0.5)' }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.04, boxShadow: '0 0 50px rgba(45,212,191,0.4)' }}
+                  whileTap={{ scale: 0.96 }}
                   onClick={handleEnter}
                   style={{
-                    padding: '20px 48px', borderRadius: 16, border: 'none',
-                    fontFamily: FONT_PIXEL, fontWeight: 'normal',
-                    fontSize: 13, letterSpacing: '0.05em',
-                    color: '#04040a', cursor: 'pointer',
+                    padding: '14px 32px', borderRadius: 14, border: 'none',
+                    fontFamily: FONT_HEADING, fontWeight: 700,
+                    fontSize: 13, letterSpacing: '0.18em', textTransform: 'uppercase',
+                    color: '#08080d', cursor: 'pointer',
                     background: 'linear-gradient(135deg, #2dd4bf 0%, #a78bfa 100%)',
-                    boxShadow: '0 8px 32px rgba(45,212,191,0.3)',
-                    transition: 'box-shadow 0.3s ease',
+                    boxShadow: '0 4px 30px rgba(45,212,191,0.3)',
                   }}
                 >
-                  LAUNCH DEMO
+                  ▶ Launch SurgeonAI
                 </motion.button>
               </motion.div>
+
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 0.25 }}
+                transition={{ delay: 1.1 }}
+                style={{ marginTop: 12, fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)' }}
+              >
+                Requires camera access · Scalpel needed for Phase 3+
+              </motion.p>
             </div>
 
-            {/* Right: Mega Icon Section */}
+            {/* Right: Pixel robot */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.8, rotate: -3 }}
+              initial={{ opacity: 0, scale: 0.8, rotate: -5 }}
               animate={{ opacity: 1, scale: 1, rotate: 0 }}
-              transition={{ delay: 0.5, type: 'spring', stiffness: 100 }}
+              transition={{ delay: 0.5, type: 'spring', stiffness: 120 }}
               style={{ flexShrink: 0, position: 'relative' }}
             >
-              <div style={{
-                position: 'absolute', inset: -40,
-                background: 'radial-gradient(circle, rgba(45,212,191,0.2) 0%, transparent 70%)',
-                filter: 'blur(40px)', zIndex: 0,
-              }} />
               <motion.img
                 src="/assets/pixel_robot.png"
                 alt="SurgeonAI Robot"
                 style={{
-                  width: 340, height: 340, borderRadius: 32,
-                  border: '4px solid rgba(255,255,255,0.1)',
-                  boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-                  position: 'relative', zIndex: 1,
+                  width: 280, height: 280, borderRadius: 24,
+                  filter: 'drop-shadow(0 0 40px rgba(45,212,191,0.3)) drop-shadow(0 0 80px rgba(167,139,250,0.15))',
                 }}
-                animate={{ y: [0, -15, 0] }}
-                transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
               />
               <motion.div
                 style={{
-                  position: 'absolute', bottom: -15, right: -15, borderRadius: 16,
-                  border: '1px solid rgba(167,139,250,0.4)',
-                  background: 'rgba(4,4,10,0.95)',
-                  backdropFilter: 'blur(12px)',
-                  padding: '12px 20px', zIndex: 2,
-                  boxShadow: '0 8px 20px rgba(0,0,0,0.4)',
+                  position: 'absolute', bottom: -8, right: -8, borderRadius: 12,
+                  border: '1px solid rgba(45,212,191,0.25)',
+                  background: 'rgba(8,8,13,0.9)',
+                  backdropFilter: 'blur(8px)',
+                  padding: '6px 12px',
                 }}
-                animate={{ scale: [1, 1.05, 1] }}
-                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                animate={{ y: [0, -4, 0] }}
+                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
               >
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', letterSpacing: '0.1em', fontFamily: FONT_PIXEL }}>
-                  VER 0.8.0
+                <span style={{ fontSize: 10, fontWeight: 600, color: '#2dd4bf', letterSpacing: '0.12em' }}>
+                  <a href="https://docs.ultralytics.com/" target="_blank" rel="noreferrer" style={{ color: '#2dd4bf', textDecoration: 'none' }}>YOLOv8</a>
+                  {' + '}
+                  <a href="https://opencv.org/" target="_blank" rel="noreferrer" style={{ color: '#2dd4bf', textDecoration: 'none' }}>OpenCV</a>
                 </span>
               </motion.div>
             </motion.div>
+
+            {/* Background glow */}
+            <div style={{
+              position: 'absolute', top: '50%', left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 600, height: 600, borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(167,139,250,0.2) 0%, rgba(45,212,191,0.1) 40%, transparent 70%)',
+              filter: 'blur(100px)',
+              pointerEvents: 'none', opacity: 0.25,
+            }} />
           </section>
 
-          {/* ── STATS BAR (Integrated) ─────────────────── */}
+          {/* ── STATS BAR ──────────────────────────────── */}
           <section style={{
-            margin: '0 32px', borderRadius: 32,
-            background: 'linear-gradient(90deg, rgba(45,212,191,0.05), rgba(167,139,250,0.05))',
-            border: '1px solid rgba(255,255,255,0.06)',
-            padding: '48px 32px',
+            padding: '28px 32px',
+            borderTop: '1px solid rgba(255,255,255,0.04)',
+            borderBottom: '1px solid rgba(255,255,255,0.04)',
+            background: 'rgba(255,255,255,0.01)',
           }}>
-            <div style={{ maxWidth: 1080, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 40, textAlign: 'center' }}>
+            <div style={{ maxWidth: 960, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 24, textAlign: 'center' }}>
               {[
-                { n: 10, s: ' Residents', label: 'Per Supervising Surgeon', color: '#f87171' },
-                { n: 85, s: '%', label: 'Trainees Request More Lab Access', color: '#60a5fa' },
-                { n: 6, s: ' Stages', label: 'Procedural Protocol AI', color: '#2dd4bf' },
-                { n: 33, s: 'ms', label: 'CV Loop Latency (Ultra-Low)', color: '#c084fc' },
-              ].map(({ n, s, label, color }, i) => (
+                { n: 5, s: 'x', label: 'More trainees than trainers' },
+                { n: 40, s: '%', label: 'Report insufficient practice' },
+                { n: 6, s: '', label: 'Phase AI protocol' },
+                { n: 30, s: ' fps', label: 'Real-time CV pipeline' },
+              ].map(({ n, s, label }, i) => (
                 <motion.div
                   key={label}
                   initial={{ opacity: 0, y: 20 }}
@@ -437,10 +381,10 @@ export default function LandingPage({ onEnter }) {
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.1 }}
                 >
-                  <div style={{ fontFamily: FONT_HEADING, fontSize: 48, fontWeight: 900, color: color, marginBottom: 8, textShadow: `0 0 30px ${color}44` }}>
+                  <div style={{ fontFamily: FONT_HEADING, fontSize: 36, fontWeight: 900, color: '#fff', marginBottom: 4 }}>
                     <CountUp to={n} suffix={s} />
                   </div>
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', color: 'rgba(255,255,255,0.4)', fontFamily: FONT_PIXEL }}>
+                  <div style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.25)' }}>
                     {label}
                   </div>
                 </motion.div>
@@ -448,54 +392,50 @@ export default function LandingPage({ onEnter }) {
             </div>
           </section>
 
-          {/* ── THE PROBLEM (Integrated visuals) ───────── */}
-          <section style={{ padding: '120px 32px', position: 'relative' }}>
-            <div style={{ maxWidth: 1120, margin: '0 auto' }}>
+          {/* ── THE PROBLEM (with pixel art) ────────────── */}
+          <section style={{ padding: '80px 32px', position: 'relative' }}>
+            <div style={{ maxWidth: 1080, margin: '0 auto' }}>
               <motion.div
                 initial={{ opacity: 0 }}
                 whileInView={{ opacity: 1 }}
                 viewport={{ once: true }}
-                style={{ marginBottom: 64, textAlign: 'center' }}
+                style={{ marginBottom: 48 }}
               >
-                <div style={{
-                  display: 'inline-block', padding: '6px 16px', borderRadius: 100,
-                  background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)',
-                  color: '#f87171', fontSize: 10, fontFamily: FONT_PIXEL, marginBottom: 20,
-                }}>
-                  CRITICAL FAILURE
-                </div>
-                <h2 style={{ fontFamily: FONT_HEADING, fontSize: 'clamp(32px, 5vw, 60px)', fontWeight: 900, lineHeight: 1.1 }}>
-                  Surgical training is <span style={{ color: '#f87171' }}>obsolete.</span>
+                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.4em', textTransform: 'uppercase', color: 'rgba(248,113,113,0.6)' }}>⚠ The Problem</span>
+                <h2 style={{ fontFamily: FONT_HEADING, fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: 900, marginTop: 12, lineHeight: 1.15 }}>
+                  Surgical training is <span style={{ color: '#f87171' }}>broken.</span>
                 </h2>
               </motion.div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 32 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24 }}>
                 {[
-                  { img: '/assets/pixel_hospital.png', title: 'TRAINER SHORTAGE', body: 'One attending consultant supervises 5–10 residents. Real hands-on guidance becomes rushed or skipped entirely.', color: '#f87171' },
-                  { img: '/assets/pixel_hourglass.png', title: 'LIMITED OR TIME', body: 'Trainees average a fraction of the autonomous hours needed. OR slots are competitive and scarce.', color: '#fb923c' },
-                  { img: '/assets/pixel_nodata.png', title: 'ZERO FEEDBACK', body: 'No precision metrics. Trainees cannot measure whether their technique deviates from optimal geometry.', color: '#facc15' },
-                ].map(({ img, title, body, color }, i) => (
+                  { img: '/assets/pixel_hospital.png', title: 'Trainer Shortage', body: 'One attending consultant supervises 5–10 residents simultaneously. Real hands-on guidance becomes rushed or skipped entirely during high-pressure rotations.', accent: '#f87171' },
+                  { img: '/assets/pixel_hourglass.png', title: 'Limited OR Time', body: 'Trainees average a fraction of the autonomous surgical hours needed to build genuine competence. OR slots are competitive and scarce.', accent: '#fb923c' },
+                  { img: '/assets/pixel_nodata.png', title: 'Zero Feedback', body: 'No real-time precision metrics exist. Trainees cannot measure whether their technique deviates from the optimal incision geometry.', accent: '#fbbf24' },
+                ].map(({ img, title, body, accent }, i) => (
                   <motion.div
                     key={title}
-                    initial={{ opacity: 0, y: 40 }}
+                    initial={{ opacity: 0, y: 30 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    transition={{ delay: i * 0.15 }}
+                    transition={{ delay: i * 0.12 }}
                     style={{
-                      borderRadius: 24, overflow: 'hidden',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      background: 'rgba(255,255,255,0.02)',
-                      transition: 'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+                      borderRadius: 20, overflow: 'hidden',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      background: 'rgba(255,255,255,0.015)',
+                      transition: 'border-color 0.4s ease',
                     }}
-                    whileHover={{ scale: 1.02, borderColor: `${color}66`, background: 'rgba(255,255,255,0.04)' }}
                   >
-                    <div style={{ position: 'relative' }}>
-                      <img src={img} alt={title} style={{ width: '100%', height: 240, objectFit: 'cover' }} />
-                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, background: 'linear-gradient(to top, rgba(4,4,10,1), transparent)' }} />
-                    </div>
-                    <div style={{ padding: '24px 28px 32px' }}>
-                      <h3 style={{ fontFamily: FONT_PIXEL, fontSize: 13, color: color, marginBottom: 16 }}>{title}</h3>
-                      <p style={{ fontSize: 15, lineHeight: 1.7, color: 'rgba(255,255,255,0.4)', fontWeight: 400 }}>{body}</p>
+                    <img
+                      src={img} alt={title}
+                      style={{
+                        width: '100%', height: 200, objectFit: 'cover',
+                        borderBottom: '1px solid rgba(255,255,255,0.04)',
+                      }}
+                    />
+                    <div style={{ padding: '20px 22px 24px' }}>
+                      <h3 style={{ fontFamily: FONT_HEADING, fontSize: 17, fontWeight: 700, color: 'rgba(255,255,255,0.85)', marginBottom: 8 }}>{title}</h3>
+                      <p style={{ fontSize: 12, lineHeight: 1.7, color: 'rgba(255,255,255,0.3)' }}>{body}</p>
                     </div>
                   </motion.div>
                 ))}
@@ -503,196 +443,168 @@ export default function LandingPage({ onEnter }) {
             </div>
           </section>
 
-          {/* ── THE SOLUTION (Full Color Integration) ───── */}
-          <section style={{ padding: '120px 32px', position: 'relative', background: 'rgba(45,212,191,0.02)' }}>
-            <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 64, alignItems: 'center' }}>
-                <div style={{ flex: '1 1 480px' }}>
-                  <div style={{
-                    display: 'inline-block', padding: '6px 16px', borderRadius: 100,
-                    background: 'rgba(45,212,191,0.1)', border: '1px solid rgba(45,212,191,0.3)',
-                    color: '#2dd4bf', fontSize: 10, fontFamily: FONT_PIXEL, marginBottom: 24,
-                  }}>
-                    SYSTEM UPGRADE
-                  </div>
-                  <h2 style={{ fontFamily: FONT_HEADING, fontSize: 'clamp(32px, 5vw, 56px)', fontWeight: 900, lineHeight: 1.1, marginBottom: 24 }}>
-                    An AI mentor that<br />
-                    <span style={{ color: '#2dd4bf' }}>never closes</span> its eyes.
-                  </h2>
-                  <p style={{ fontSize: 18, lineHeight: 1.7, color: 'rgba(255,255,255,0.5)', marginBottom: 48 }}>
-                    SurgeonAI bridges the gap with a hyper-accurate computer-vision pipeline that monitors, measures, and coaches in real time.
-                  </p>
+          {/* ── THE SOLUTION ────────────────────────────── */}
+          <section style={{ padding: '80px 32px', position: 'relative' }}>
+            <div style={{ maxWidth: 1080, margin: '0 auto' }}>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true }}
+                style={{ marginBottom: 48 }}
+              >
+                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.4em', textTransform: 'uppercase', color: 'rgba(45,212,191,0.6)' }}>💡 The Solution</span>
+                <h2 style={{ fontFamily: FONT_HEADING, fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: 900, marginTop: 12, lineHeight: 1.15, maxWidth: 640 }}>
+                  An AI trainer that <span style={{ color: '#2dd4bf' }}>never leaves</span> the OR.
+                </h2>
+                <p style={{ marginTop: 16, fontSize: 14, color: 'rgba(255,255,255,0.3)', maxWidth: 560, lineHeight: 1.7 }}>
+                  SurgeonAI uses a live camera, a real scalpel, and a computer-vision pipeline to
+                  guide trainees through precise surgical procedures — measuring every angle, flagging every deviation, in real time.
+                </p>
+              </motion.div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-                    {[
-                      { icon: '🎯', label: 'PRECISE METRICS', desc: 'Real-time angle tracking against 30–60° ideal vector.', color: '#2dd4bf' },
-                      { icon: '🔊', label: 'VOICE GUIDANCE', desc: 'ElevenLabs AI feedback directly into your headset.', color: '#a78bfa' },
-                      { icon: '🧬', label: 'PHASE PROTOCOL', desc: '6-stage state machine ensures total procedure safety.', color: '#f472b6' },
-                      { icon: '🛰️', label: 'EDGE PROCESSING', desc: 'Ultralytics YOLOv8 loops at 30fps with 0ms delay.', color: '#3b82f6' },
-                    ].map((feat, i) => (
-                      <motion.div
-                        key={feat.label}
-                        initial={{ opacity: 0, x: -20 }}
-                        whileInView={{ opacity: 1, x: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: i * 0.1 }}
-                        style={{ display: 'flex', gap: 20, alignItems: 'start' }}
-                      >
-                        <div style={{
-                          width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          background: `${feat.color}15`, border: `1px solid ${feat.color}33`, fontSize: 24, boxShadow: `0 0 20px ${feat.color}11`
-                        }}>
-                          {feat.icon}
-                        </div>
-                        <div>
-                          <h4 style={{ fontFamily: FONT_PIXEL, fontSize: 11, color: feat.color, marginBottom: 6 }}>{feat.label}</h4>
-                          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.3)', lineHeight: 1.6 }}>{feat.desc}</p>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
-
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20 }}>
+                {/* Pixel sprite sheet */}
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true }}
-                  style={{ flex: '1 1 400px', maxWidth: 500, position: 'relative' }}
+                  style={{
+                    borderRadius: 20, overflow: 'hidden',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    background: 'rgba(255,255,255,0.015)',
+                    padding: 0,
+                  }}
                 >
-                  <div style={{ position: 'absolute', inset: -30, background: 'radial-gradient(circle, rgba(167,139,250,0.15), transparent 70%)', filter: 'blur(30px)', zIndex: 0 }} />
-                  <img
-                    src="/assets/pixel_medical.png"
-                    alt="System Icons"
-                    style={{
-                      width: '100%', borderRadius: 32, border: '1px solid rgba(255,255,255,0.1)',
-                      boxShadow: '0 30px 60px rgba(0,0,0,0.6)', position: 'relative', zIndex: 1,
-                    }}
-                  />
-                  <div style={{
-                    position: 'absolute', top: 20, right: 20, zIndex: 2,
-                    padding: '8px 14px', borderRadius: 8, background: '#04040a', border: '1px solid rgba(255,255,255,0.1)',
-                    fontFamily: FONT_PIXEL, fontSize: 8, color: '#2dd4bf',
-                  }}>
-                    SPRITE_PK_v4
-                  </div>
+                  <img src="/assets/pixel_medical.png" alt="Medical pixel sprites" style={{ width: '100%', display: 'block' }} />
                 </motion.div>
+
+                {/* Features list */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20, justifyContent: 'center' }}>
+                  {[
+                    { icon: '🎯', label: 'Real-Time Angle Tracking', desc: 'CV measures scalpel approach angle frame-by-frame against ideal 30–60° incision vector.' },
+                    { icon: '🗣️', label: 'AI Voice Coaching', desc: 'ElevenLabs TTS issues live verbal guidance — like a senior surgeon in your ear.' },
+                    { icon: '🔒', label: '6-Phase State Machine', desc: 'Rigid protocol enforces correct procedural sequence, not just technique.' },
+                    { icon: '📷', label: 'Zero Extra Hardware', desc: 'No AR headset. No haptic gloves. Just a camera, a scalpel, and SurgeonAI.' },
+                  ].map(({ icon, label, desc }, i) => (
+                    <motion.div
+                      key={label}
+                      initial={{ opacity: 0, x: -15 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: i * 0.08 }}
+                      style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}
+                    >
+                      <span style={{ fontSize: 20, flexShrink: 0, marginTop: 2 }}>{icon}</span>
+                      <div>
+                        <p style={{ fontFamily: FONT_HEADING, fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.8)', marginBottom: 4 }}>{label}</p>
+                        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', lineHeight: 1.65 }}>{desc}</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
               </div>
             </div>
           </section>
 
-          {/* ── BUILT WITH (Colorful Badges) ────────────── */}
-          <section style={{ padding: '80px 32px', textAlign: 'center' }}>
-            <div style={{ maxWidth: 1000, margin: '0 auto' }}>
-              <h2 style={{ fontFamily: FONT_PIXEL, fontSize: 12, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.4em', marginBottom: 48 }}>
-                BUILT WITH
-              </h2>
-              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 14 }}>
-                {TECH_STACK.map((tech, i) => (
-                  <motion.a
-                    key={tech.name}
-                    href={tech.url}
+          {/* ── BUILT WITH ──────────────────────────────── */}
+          <section style={{
+            padding: '56px 32px',
+            borderTop: '1px solid rgba(255,255,255,0.04)',
+            textAlign: 'center',
+          }}>
+            <div style={{ maxWidth: 900, margin: '0 auto' }}>
+              <motion.p
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true }}
+                style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.35em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.2)', marginBottom: 24 }}
+              >
+                Built With
+              </motion.p>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true }}
+                style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 10 }}
+              >
+                {TECH_STACK.map(({ name, url }) => (
+                  <a
+                    key={name}
+                    href={url}
                     target="_blank"
                     rel="noreferrer"
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    whileInView={{ opacity: 1, scale: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.05 }}
                     style={{
-                      padding: '12px 24px', borderRadius: 14,
+                      padding: '10px 18px', borderRadius: 12,
+                      border: '1px solid rgba(255,255,255,0.06)',
                       background: 'rgba(255,255,255,0.02)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      fontFamily: FONT_HEADING, fontWeight: 700, fontSize: 13,
-                      color: 'rgba(255,255,255,0.4)', textDecoration: 'none',
-                      transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                      fontSize: 11, fontWeight: 600, letterSpacing: '0.12em',
+                      textTransform: 'uppercase',
+                      color: 'rgba(255,255,255,0.35)',
+                      textDecoration: 'none',
+                      transition: 'all 0.3s ease',
                     }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = `${tech.color}15`;
-                      e.currentTarget.style.borderColor = `${tech.color}55`;
-                      e.currentTarget.style.color = '#fff';
-                      e.currentTarget.style.transform = 'translateY(-4px)';
-                      e.currentTarget.style.boxShadow = `0 10px 40px ${tech.color}22`;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
-                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
-                      e.currentTarget.style.color = 'rgba(255,255,255,0.4)';
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
+                    onMouseEnter={(e) => { e.target.style.color = '#2dd4bf'; e.target.style.borderColor = 'rgba(45,212,191,0.3)'; }}
+                    onMouseLeave={(e) => { e.target.style.color = 'rgba(255,255,255,0.35)'; e.target.style.borderColor = 'rgba(255,255,255,0.06)'; }}
                   >
-                    {tech.name}
-                  </motion.a>
+                    {name}
+                  </a>
                 ))}
-              </div>
+              </motion.div>
             </div>
           </section>
 
-          {/* ── FOOTER CTA (Colorful) ───────────────────── */}
-          <section style={{ padding: '120px 32px 160px', textAlign: 'center', position: 'relative' }}>
-            {/* Mega glow */}
-            <div style={{
-              position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
-              width: '100%', height: '100%', background: 'radial-gradient(circle, rgba(167,139,250,0.08) 0%, transparent 60%)',
-              pointerEvents: 'none',
-            }} />
-
-            <div style={{ maxWidth: 800, margin: '0 auto', position: 'relative', zIndex: 1 }}>
+          {/* ── FOOTER CTA ──────────────────────────────── */}
+          <section style={{ padding: '80px 32px', textAlign: 'center' }}>
+            <div style={{ maxWidth: 560, margin: '0 auto' }}>
               <motion.div
-                initial={{ opacity: 0, y: 30 }}
+                initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
               >
-                <motion.img
+                <img
                   src="/assets/pixel_robot.png" alt=""
-                  style={{ width: 100, height: 100, margin: '0 auto 32px', borderRadius: 24, boxShadow: '0 0 40px rgba(167,139,250,0.4)' }}
-                  animate={{ y: [0, -10, 0] }}
-                  transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ width: 72, height: 72, margin: '0 auto 24px', borderRadius: 14, filter: 'drop-shadow(0 0 25px rgba(45,212,191,0.3))' }}
                 />
-                <h2 style={{ fontFamily: FONT_HEADING, fontSize: 'clamp(36px, 6vw, 72px)', fontWeight: 900, marginBottom: 20 }}>
-                  Ready to <GlitchText color1="#2dd4bf" color2="#f472b6"><span style={{ color: '#2dd4bf' }}>operate?</span></GlitchText>
+                <h2 style={{ fontFamily: FONT_HEADING, fontSize: 'clamp(26px, 3.5vw, 40px)', fontWeight: 900, marginBottom: 12 }}>
+                  Ready to <GlitchText><span style={{ color: '#2dd4bf' }}>operate?</span></GlitchText>
                 </h2>
-                <p style={{ fontSize: 20, color: 'rgba(255,255,255,0.4)', marginBottom: 48, maxWidth: 500, marginInline: 'auto' }}>
-                  The surgical theater of the future is open. Access the HUD now.
+                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', marginBottom: 32 }}>
+                  Pick up your scalpel. The AI is watching.
                 </p>
-
                 <motion.button
-                  whileHover={{ scale: 1.05, boxShadow: '0 0 80px rgba(45,212,191,0.6)' }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.04, boxShadow: '0 0 60px rgba(45,212,191,0.4)' }}
+                  whileTap={{ scale: 0.96 }}
                   onClick={handleEnter}
                   style={{
-                    padding: '24px 64px', borderRadius: 20, border: 'none',
-                    fontFamily: FONT_PIXEL, fontWeight: 'normal',
-                    fontSize: 16, letterSpacing: '0.05em',
-                    color: '#04040a', cursor: 'pointer',
+                    padding: '16px 40px', borderRadius: 16, border: 'none',
+                    fontFamily: FONT_HEADING, fontWeight: 700,
+                    fontSize: 14, letterSpacing: '0.2em', textTransform: 'uppercase',
+                    color: '#08080d', cursor: 'pointer',
                     background: 'linear-gradient(135deg, #2dd4bf 0%, #a78bfa 100%)',
-                    boxShadow: '0 10px 40px rgba(45,212,191,0.4)',
+                    boxShadow: '0 4px 40px rgba(45,212,191,0.3)',
                   }}
                 >
-                  ENTER HUD
+                  ▶ Launch SurgeonAI
                 </motion.button>
               </motion.div>
             </div>
           </section>
 
-          {/* ── FOOTER CREDITS (Premium) ────────────────── */}
-          <footer style={{
-            padding: '48px 32px',
-            borderTop: '1px solid rgba(255,255,255,0.06)',
-            textAlign: 'center', background: 'rgba(0,0,0,0.2)',
+          {/* ── FOOTER CREDITS ──────────────────────────── */}
+          <div style={{
+            padding: '24px 32px',
+            borderTop: '1px solid rgba(255,255,255,0.04)',
+            textAlign: 'center',
           }}>
-            <div style={{ maxWidth: 1000, margin: '0 auto' }}>
-              <p style={{ fontFamily: FONT_PIXEL, fontSize: 8, color: 'rgba(255,255,255,0.15)', letterSpacing: '0.2em', marginBottom: 24 }}>
-                DESIGNED & ENGINEERED FOR THE FUTURE OF MEDICINE
-              </p>
-              <p style={{ fontFamily: FONT_BODY, fontSize: 15, color: 'rgba(255,255,255,0.3)', marginBottom: 8 }}>
-                Built by <span style={{ color: '#2dd4bf', fontWeight: 600 }}>Faizan Khan</span> · <span style={{ color: '#a78bfa', fontWeight: 600 }}>Rabuor Tindi</span> · <span style={{ color: '#f472b6', fontWeight: 600 }}>Suess Luna</span>
-              </p>
-              <div style={{ height: 1, width: 60, background: 'rgba(255,255,255,0.1)', margin: '24px auto' }} />
-              <p style={{ fontFamily: FONT_PIXEL, fontSize: 8, color: 'rgba(255,255,255,0.1)', letterSpacing: '0.5em' }}>
-                SURGEONAI © 2026. ALL RIGHTS RESERVED.
-              </p>
-            </div>
-          </footer>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', fontWeight: 500, marginBottom: 6 }}>
+              This application was built by <strong style={{ color: 'rgba(255,255,255,0.5)' }}>Faizan Khan</strong>,{' '}
+              <strong style={{ color: 'rgba(255,255,255,0.5)' }}>Rabuor Tindi</strong>, and{' '}
+              <strong style={{ color: 'rgba(255,255,255,0.5)' }}>Suess Luna</strong>
+            </p>
+            <p style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.1)', marginTop: 8 }}>
+              SurgeonAI · v0.1.0
+            </p>
+          </div>
         </motion.div>
       ) : (
         /* ── Transition screen ── */
@@ -702,8 +614,8 @@ export default function LandingPage({ onEnter }) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           style={{
-            position: 'fixed', inset: 0, zIndex: 300,
-            background: '#04040a',
+            position: 'fixed', inset: 0, zIndex: 200,
+            background: '#08080d',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
@@ -711,30 +623,28 @@ export default function LandingPage({ onEnter }) {
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 32 }}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}
           >
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-              style={{ padding: 4, borderRadius: '50%', background: 'linear-gradient(45deg, #2dd4bf, #a78bfa)' }}
-            >
-              <img src="/assets/pixel_robot.png" alt="" style={{ width: 80, height: 80, borderRadius: '50%' }} />
-            </motion.div>
-            <div style={{ width: 200, height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}>
+            <motion.img
+              src="/assets/pixel_robot.png" alt=""
+              style={{ width: 56, height: 56, borderRadius: 12 }}
+              animate={{ y: [0, -6, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <div style={{ width: 180, height: 3, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}>
               <motion.div
                 initial={{ width: '0%' }}
                 animate={{ width: '100%' }}
-                transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ duration: 0.8, ease: 'easeInOut' }}
                 style={{ height: '100%', borderRadius: 99, background: 'linear-gradient(90deg, #2dd4bf, #a78bfa)' }}
               />
             </div>
             <motion.p
-              fontFamily={FONT_PIXEL}
-              animate={{ opacity: [0.4, 1, 0.4] }}
-              transition={{ duration: 1, repeat: Infinity }}
-              style={{ fontSize: 10, letterSpacing: '0.4em', color: '#2dd4bf' }}
+              animate={{ opacity: [0.3, 1, 0.3] }}
+              transition={{ duration: 1.2, repeat: Infinity }}
+              style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.3em', textTransform: 'uppercase', color: '#2dd4bf' }}
             >
-              INITIATING...
+              Booting SurgeonAI...
             </motion.p>
           </motion.div>
         </motion.div>
