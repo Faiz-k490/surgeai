@@ -1,7 +1,8 @@
-# Virtual environment
+# Virtual environments
 venv/
 .venv/
 .venv311/
+.venv*/
 
 # Environment variables
 .env
@@ -19,7 +20,12 @@ build/
 .cursorrules
 .aierules
 
-# Runtime logs (see logging/README.md)
-logging/logs/*.log
-
+# Model weights
 *.pt
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db

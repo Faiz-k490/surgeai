@@ -1,8 +1,6 @@
 flask
 flask-socketio
-colorlog
 opencv-python
-python-dotenv
 ultralytics
 elevenlabs
 SpeechRecognition
@@ -11,3 +9,5 @@ snowflake-connector-python
 pydantic
 pyaudio
 pyttsx3
+numpy
+python-dotenv

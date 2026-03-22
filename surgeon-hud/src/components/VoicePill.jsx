@@ -24,13 +24,28 @@ export default function VoicePill() {
     utterance.rate = 0.95;
     utterance.pitch = 0.9;
     utterance.volume = 1.0;
-    // Try to pick a natural-sounding voice
+    // BUG-8 fix: Chrome loads voices asynchronously; getVoices() returns []
+    // on first call. Use voiceschanged event or retry with short delay.
+    const setVoiceAndSpeak = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = voices.find(
+        (v) => v.name.includes('Samantha') || v.name.includes('Google') || v.name.includes('Daniel')
+      );
+      if (preferred) utterance.voice = preferred;
+      window.speechSynthesis.speak(utterance);
+    };
     const voices = window.speechSynthesis.getVoices();
-    const preferred = voices.find(
-      (v) => v.name.includes('Samantha') || v.name.includes('Google') || v.name.includes('Daniel')
-    );
-    if (preferred) utterance.voice = preferred;
-    window.speechSynthesis.speak(utterance);
+    if (voices.length > 0) {
+      setVoiceAndSpeak();
+    } else {
+      // Voices not loaded yet — wait for the event
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.onvoiceschanged = null;
+        setVoiceAndSpeak();
+      };
+      // Fallback: speak with default voice after 500ms if event never fires
+      setTimeout(() => window.speechSynthesis.speak(utterance), 500);
+    }
   }, []);
 
   // When voicePrompt arrives, show pill and speak

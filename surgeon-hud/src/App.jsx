@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { useState } from 'react';
 import { useHudStore } from './store/useHudStore';
 import SocketManager from './providers/SocketManager';
 import BootScreen from './components/BootScreen';
@@ -7,6 +8,7 @@ import SystemHealth from './components/SystemHealth';
 import AROverlay from './components/AROverlay';
 import VoicePill from './components/VoicePill';
 import ConnectionFallback from './components/ConnectionFallback';
+import LandingPage from './components/LandingPage';
 
 
 // ── Phase 0: Scanning Dot ──────────────────────────────────────────────────
@@ -30,52 +32,55 @@ function ScanningDot() {
 }
 
 
-// ── Phase 3: Angle HUD ────────────────────────────────────────────────────
+// ── Angle HUD (Always Visible) ────────────────────────────────────────────
 function AngleHUD() {
-  const phase = useHudStore((s) => s.phase);
   const angleData = useHudStore((s) => s.angleData);
 
-  if (phase !== 3 || !angleData) return null;
-
-  const isOptimal = angleData.status === 'Optimal';
-  const glow = isOptimal ? '#22c55e' : '#ef4444';
+  const isIdle = !angleData || angleData.status === 'idle';
+  const isOptimal = !isIdle && angleData.status === 'Optimal';
+  const glow = isIdle ? '#ffffff' : isOptimal ? '#22c55e' : '#ef4444';
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
-      className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none"
+    <div
+      className="absolute bottom-5 right-5 z-20 pointer-events-none"
     >
       <div
         className="px-6 py-3 rounded-2xl border backdrop-blur-xl flex items-center gap-4"
         style={{
           backgroundColor: 'rgba(0,0,0,0.5)',
-          borderColor: `${glow}33`,
-          boxShadow: `0 0 30px ${glow}22`,
+          borderColor: isIdle ? 'rgba(255,255,255,0.1)' : `${glow}33`,
+          boxShadow: isIdle ? 'none' : `0 0 30px ${glow}22`,
         }}
       >
         <span className="text-[10px] font-mono tracking-[0.2em] text-white/40 uppercase">
           Approach
         </span>
-        <span
-          className="text-3xl font-mono font-bold tabular-nums"
-          style={{ color: glow, textShadow: `0 0 14px ${glow}88` }}
-        >
-          {angleData.approach_angle}°
-        </span>
-        <span
-          className="text-[10px] font-mono tracking-wider uppercase px-2 py-0.5 rounded-full border"
-          style={{
-            color: glow,
-            borderColor: `${glow}44`,
-            backgroundColor: `${glow}11`,
-          }}
-        >
-          {angleData.status}
-        </span>
+        {isIdle ? (
+          <span className="text-sm font-mono tracking-wider text-white/30">
+            Waiting for scalpel…
+          </span>
+        ) : (
+          <>
+            <span
+              className="text-3xl font-mono font-bold tabular-nums"
+              style={{ color: glow, textShadow: `0 0 14px ${glow}88` }}
+            >
+              {angleData.approach_angle}°
+            </span>
+            <span
+              className="text-[10px] font-mono tracking-wider uppercase px-2 py-0.5 rounded-full border"
+              style={{
+                color: glow,
+                borderColor: `${glow}44`,
+                backgroundColor: `${glow}11`,
+              }}
+            >
+              {angleData.status}
+            </span>
+          </>
+        )}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -189,58 +194,71 @@ function SurgeryComplete() {
 // ── App ────────────────────────────────────────────────────────────────────
 function App() {
   const isBooted = useHudStore((s) => s.isBooted);
+  const setBooted = useHudStore((s) => s.setBooted);
+  const [showLanding, setShowLanding] = useState(true);
 
   return (
-    <SocketManager>
-      <main className="relative w-screen h-screen overflow-hidden bg-black">
-        {/* Z-100: Boot Sequence */}
-        <BootScreen />
+    <>
+      {/* Landing page — full-screen, shown until user clicks CTA */}
+      <AnimatePresence>
+        {showLanding && (
+          <LandingPage onEnter={() => {
+            setShowLanding(false);
+            setBooted(true);
+          }} />
+        )}
+      </AnimatePresence>
 
-        <AnimatePresence>
-          {isBooted && (
-            <motion.div
-              key="hud"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="absolute inset-0"
-            >
-              {/* Z-0: Live Video Feed (MJPEG from backend) */}
-              <VideoBackground />
+      {/* HUD system — mounted once landing exits */}
+      {!showLanding && (
+        <SocketManager>
+          <main className="relative w-screen h-screen overflow-hidden bg-black">
+            <AnimatePresence>
+              {isBooted && (
+                <motion.div
+                  key="hud"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  className="absolute inset-0"
+                >
+                  {/* Z-0: Live Video Feed (MJPEG from backend) */}
+                  <VideoBackground />
 
-              {/* Z-5: Scanning dot (Phase 0 only) */}
-              <ScanningDot />
+                  {/* Z-5: Scanning dot (Phase 0 only) */}
+                  <ScanningDot />
 
-              {/* Z-10: AR Overlay (SVG boxes/polygons/lines) */}
-              <AROverlay />
+                  {/* Z-10: AR Overlay (SVG boxes/polygons/lines) */}
+                  <AROverlay />
 
-              {/* Z-15: FPS / Latency readout */}
-              <div className="relative z-[15]">
-                <SystemHealth />
-              </div>
+                  {/* Z-15: FPS / Latency readout */}
+                  <div className="relative z-[15]">
+                    <SystemHealth />
+                  </div>
 
-              {/* Z-20: Angle HUD (Phase 3 only) */}
-              <AnimatePresence>
-                <AngleHUD />
-              </AnimatePresence>
+                  {/* Z-20: Angle HUD (ALWAYS visible — shows idle state outside Phase 3) */}
+                  <AngleHUD />
 
-              {/* Z-30: Warning Banner */}
-              <WarningBanner />
+                  {/* Z-30: Warning Banner */}
+                  <WarningBanner />
 
-              {/* Z-40: Voice Pill (Dynamic Island, TOP) */}
-              <VoicePill />
+                  {/* Z-40: Voice Pill (Dynamic Island, TOP) */}
+                  <VoicePill />
 
-              {/* Z-50: Surgery Complete */}
-              <SurgeryComplete />
+                  {/* Z-50: Surgery Complete */}
+                  <SurgeryComplete />
 
-              {/* Z-100: Connection Fallback */}
-              <ConnectionFallback />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
-    </SocketManager>
+                  {/* Z-100: Connection Fallback */}
+                  <ConnectionFallback />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </main>
+        </SocketManager>
+      )}
+    </>
   );
 }
 
 export default App;
+
