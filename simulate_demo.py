@@ -124,37 +124,52 @@ def _bbox_fallback(bbox_xyxy):
     return math.degrees(math.atan2(h, w))
 
 
-# ── OpenCV: Black-tape Scalpel Fallback Detection ─────────────────────────────
+# ── OpenCV: Color-Banded Scalpel Detection ────────────────────────────────────
 
-def detect_black_scalpel(frame, exclude_bbox=None):
-    """Detect a dark, elongated object (scalpel wrapped in black tape).
-    Uses HSV value channel to find very dark regions, then filters by
-    elongation (aspect ratio >= 2.5) and minimum area.
+def detect_colored_scalpel(frame, exclude_bbox=None):
+    """Detect the color-banded scalpel handle + silver blade tip.
+
+    The scalpel has a colorful patterned handle (purple, yellow-green, cyan
+    bands on a dark base) and an exposed silver metal blade.  We combine:
+      1. High-saturation mask → catches the vivid colour bands
+      2. Silver/metallic mask → catches the blade tip (high V, low S)
+    Then find elongated contours (aspect ≥ 2.5) that are NOT the banana.
+
     Returns {cid, conf, box, angle} or None.
-    exclude_bbox: banana bbox to ignore (xyxy format).
     """
     try:
         fh, fw = frame.shape[:2]
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-
-        # Black tape: low value, any hue/sat
-        dark_mask = cv2.inRange(hsv, np.array([0, 0, 0]), np.array([180, 255, 55]))
-
-        # Clean up noise
         k = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-        dark_mask = cv2.morphologyEx(dark_mask, cv2.MORPH_CLOSE, k, iterations=2)
-        dark_mask = cv2.morphologyEx(dark_mask, cv2.MORPH_OPEN, k, iterations=1)
 
-        # If banana bbox supplied, zero out that region to avoid false positives
+        # ── 1. Vivid colour bands (high saturation, decent brightness) ────
+        color_mask = cv2.inRange(hsv,
+                                 np.array([0, 80, 50]),
+                                 np.array([180, 255, 255]))
+
+        # ── 2. Silver / metallic blade (very low sat, high value) ─────────
+        silver_mask = cv2.inRange(hsv,
+                                  np.array([0, 0, 150]),
+                                  np.array([180, 50, 255]))
+
+        # ── Combine ───────────────────────────────────────────────────────
+        combined = cv2.bitwise_or(color_mask, silver_mask)
+
+        # Morphological cleanup — connect nearby bands into one blob
+        combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, k, iterations=4)
+        combined = cv2.morphologyEx(combined, cv2.MORPH_OPEN, k, iterations=1)
+
+        # ── Exclude banana region ─────────────────────────────────────────
         if exclude_bbox is not None:
             ex1, ey1, ex2, ey2 = [int(v) for v in exclude_bbox]
-            # Add margin
-            margin = 20
+            margin = 25
             ex1, ey1 = max(0, ex1 - margin), max(0, ey1 - margin)
             ex2, ey2 = min(fw, ex2 + margin), min(fh, ey2 + margin)
-            dark_mask[ey1:ey2, ex1:ex2] = 0
+            combined[ey1:ey2, ex1:ex2] = 0
 
-        contours, _ = cv2.findContours(dark_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # ── Find elongated contours ───────────────────────────────────────
+        contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL,
+                                       cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             return None
 
@@ -162,34 +177,51 @@ def detect_black_scalpel(frame, exclude_bbox=None):
         best_score = 0
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            if area < 800:  # minimum pixel area
+            if area < 600:
                 continue
             rect = cv2.minAreaRect(cnt)
             _, (rw, rh), angle = rect
             if rw < 1 or rh < 1:
                 continue
             aspect = max(rw, rh) / min(rw, rh)
-            if aspect < 2.5:  # must be elongated like a scalpel
+            if aspect < 2.5:
                 continue
-            # Score by area * aspect (prefer large elongated objects)
+
+            # Bonus: verify the contour contains multiple colour hues
+            # (banana is mono-hue ~25-35; scalpel has purple+green+yellow)
+            bx, by, bw, bh = cv2.boundingRect(cnt)
+            roi_hue = hsv[by:by+bh, bx:bx+bw, 0]
+            roi_sat = hsv[by:by+bh, bx:bx+bw, 1]
+            # Count pixels with saturation > 60 in distinct hue buckets
+            sat_px = roi_sat > 60
+            if sat_px.sum() > 20:
+                hue_vals = roi_hue[sat_px]
+                # Check how many of 6 hue buckets (0-30, 30-60, ..., 150-180) are hit
+                buckets_hit = 0
+                for lo in range(0, 180, 30):
+                    if np.any((hue_vals >= lo) & (hue_vals < lo + 30)):
+                        buckets_hit += 1
+                # Scalpel should hit at least 3 hue buckets (purple+green+yellow)
+                # Banana only hits 1-2 (yellow range)
+                if buckets_hit < 2:
+                    continue
+
             score = area * aspect
             if score > best_score:
                 best_score = score
-                # Normalize angle to long-axis
                 if rw < rh:
                     angle += 90
-                bx, by, bw, bh = cv2.boundingRect(cnt)
                 best = {
                     "cid": KNIFE_ID,
-                    "conf": 0.70,
+                    "conf": 0.75,
                     "box": [float(bx), float(by), float(bx + bw), float(by + bh)],
                     "angle": abs(angle) % 180,
-                    "_source": "opencv",
+                    "_source": "opencv_color",
                 }
 
         return best
     except Exception as exc:
-        logger.debug("Black scalpel detection failed: %s", exc)
+        logger.debug("Colored scalpel detection failed: %s", exc)
         return None
 
 
@@ -557,7 +589,7 @@ def vision_loop():
                 (d for d in detections if d["cid"] == BANANA_ID), None
             )
             exclude = banana_det_for_exclude["box"] if banana_det_for_exclude else None
-            cv_scalpel = detect_black_scalpel(frame, exclude_bbox=exclude)
+            cv_scalpel = detect_colored_scalpel(frame, exclude_bbox=exclude)
             if cv_scalpel is not None:
                 detections.append(cv_scalpel)
                 logger.debug(
