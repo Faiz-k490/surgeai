@@ -26,6 +26,7 @@ export default function SocketManager({ children }) {
     socket.on('connect', () => {
       setIsConnected(true);
       log.ok(`Socket.IO connected — ${getSocketUrl()}`);
+      socket.emit('activate_surgeai');
     });
     socket.on('disconnect', (reason) => {
       setIsConnected(false);

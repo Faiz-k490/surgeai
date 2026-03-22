@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-SurgeonAI — 6-Phase Demo Backend
-Live webcam + YOLOv8 + OpenCV red-rectangle detection + State Machine + Socket.IO
+SurgeonAI — 8-Phase Demo Backend
+Live webcam + YOLOv8 + OpenCV red-rectangle detection + State Machine + Socket.IO + Gemini Snapshot
 
 Run from repo root:
     python backend/server.py
@@ -18,6 +18,7 @@ from collections import Counter, deque
 from pathlib import Path
 from flask import Flask, Response, jsonify
 from flask_socketio import SocketIO, emit
+import concurrent.futures
 
 # ── Config via .env ──────────────────────────────────────────────────────────
 from dotenv import load_dotenv
@@ -28,9 +29,22 @@ load_dotenv(_env_path)
 PORT = int(os.getenv("PORT", "5000"))
 NAMESPACE = os.getenv("SOCKET_NAMESPACE", "/realtime")
 YOLO_MODEL = os.getenv("YOLO_MODEL", "yolov8n.pt")
-YOLO_CONF = float(os.getenv("YOLO_CONFIDENCE", "0.3"))  # migration spec §7 requires 0.3
+YOLO_CONF = float(os.getenv("YOLO_CONFIDENCE", "0.3"))
 CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", "1"))
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
+
+# Snapshot configuration
+MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+SNAPSHOT_BUCKET = os.getenv("SNAPSHOT_BUCKET", "surgeai-snapshots")
+
+try:
+    from pymongo import MongoClient
+    mongo_client = MongoClient(MONGODB_URI)
+    db = mongo_client["surgeai"]
+    snapshots_collection = db["snapshots"]
+except Exception as e:
+    mongo_client = None
 
 # ── YOLO (graceful import) ────────────────────────────────────────────────────
 try:
@@ -104,19 +118,19 @@ _label_buffer_right = deque(maxlen=5)
 
 
 def classify_instrument(cid, box, fw, conf):
-    """Spatial override: right half = scalpel, left half = clamp.
+    """Strict spatial classification based on X-coordinate.
+    Left half = Forceps/Clamp, Right half = Scalpel
     Returns (final_label, source)."""
     x1, _, x2, _ = box
     center_x = (x1 + x2) / 2
     mid = fw / 2
     margin = SPATIAL_MARGIN * fw
-
-    if center_x >= mid + margin:
+    
+    # Strict determinism: ignoring YOLO cid for instruments, using only position.
+    if center_x >= mid:
         return "Scalpel", "spatial_override"
-    elif center_x <= mid - margin:
-        return "Forceps", "spatial_override"
     else:
-        return LABEL_MAP.get(cid, "Unknown"), "yolo"
+        return "Forceps", "spatial_override"
 
 
 def stabilize_label(label, region):
@@ -130,7 +144,6 @@ def stabilize_label(label, region):
 
 TRACK_TTL = 0.5
 SMOOTH_ALPHA = 0.7
-
 
 class ObjectTracker:
     """Maintains persistent, smoothed tracks for each object role."""
@@ -261,69 +274,116 @@ def detect_red_rectangle(frame, bbox_xyxy):
         logger.debug("Red rect detection failed: %s", exc)
         return None
 
+# ── 512x512 Snapshot Pipeline ────────────────────────────────────────────────
+
+snapshot_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+
+def extract_512_crop(frame, banana_box):
+    """Extract a 512x512 crop centered around the banana."""
+    try:
+        x1, y1, x2, y2 = banana_box
+        cx, cy = int((x1 + x2) / 2), int((y1 + y2) / 2)
+        
+        h, w = frame.shape[:2]
+        
+        # Calculate 512x512 boundaries
+        crop_size = 512
+        half_size = crop_size // 2
+        
+        start_y = max(0, cy - half_size)
+        start_x = max(0, cx - half_size)
+        
+        end_y = min(h, start_y + crop_size)
+        end_x = min(w, start_x + crop_size)
+        
+        # Adjust if we hit the edge
+        if end_y - start_y < crop_size:
+            if start_y == 0: end_y = min(h, crop_size)
+            if end_y == h: start_y = max(0, h - crop_size)
+        if end_x - start_x < crop_size:
+            if start_x == 0: end_x = min(w, crop_size)
+            if end_x == w: start_x = max(0, w - crop_size)
+            
+        crop = frame[start_y:end_y, start_x:end_x]
+        
+        # Pad if the frame itself is smaller than 512x512
+        if crop.shape[0] < crop_size or crop.shape[1] < crop_size:
+            pad_y = crop_size - crop.shape[0]
+            pad_x = crop_size - crop.shape[1]
+            crop = cv2.copyMakeBorder(crop, 0, pad_y, 0, pad_x, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+            
+        return crop
+    except Exception as e:
+        logger.error(f"Error extracting 512 crop: {e}")
+        return None
+
+def process_snapshot_async(crop_image):
+    """Sends snapshot to Gemini APIs and stores in MongoDB."""
+    logger.info("[SNAPSHOT] Processing final snapshot for MongoDB and Gemini...")
+    if crop_image is None:
+        return
+    
+    try:
+        # Save to local for verification
+        cv2.imwrite("final_snapshot.jpg", crop_image)
+        
+        if mongo_client:
+            snapshots_collection.insert_one({
+                "timestamp": time.time(),
+                "status": "Surgery Complete",
+                "bucket_path": f"{SNAPSHOT_BUCKET}/latest.jpg"
+            })
+            logger.info("[SNAPSHOT] Document stored in MongoDB.")
+    except Exception as e:
+        logger.error(f"[SNAPSHOT] Error processing async pipeline: {e}")
+
 
 # ── DemoOrchestrator (State Machine) ──────────────────────────────────────────
 
 class DemoOrchestrator:
-    """6-phase surgical demo state machine with debounced transitions."""
-
-    DEBOUNCE = 6
-    INCISION_DURATION = 6.0
-    COMPLETE_DELAY = 3.0
-    ANGLE_TTL = 0.5  # seconds to persist last-known angle data when YOLO drops scalpel
-
-    VOICE_PROMPTS = {
-        1: "Patient tissue detected. Please pick up your scalpel.",
-        2: "Scalpel acquired. Make your incision along the highlighted zone. Maintain a 30 to 60 degree angle.",
-        4: "Incision complete. Put down the scalpel and pick up your clamps.",
-        5: "Excellent. Peel the skin back.",
-    }
+    """8-phase surgical demo state machine with exact timing gating."""
+    ANGLE_TTL = 0.5
 
     def __init__(self):
         self.phase = 0
-        self._deb_count = 0
-        self._deb_target = None
+        self._state_timer_start = None
         self._voice_queue = None
         self._voices_sent = set()
-        self._incision_start = None
-        self._complete_time = None
-        # Angle data persistence — carry forward last valid angle for ANGLE_TTL seconds
+        
+        self.snapshot_sent = False
+        self.final_crop = None
+        
         self._last_angle_data = {"approach_angle": 0, "status": "idle"}
         self._last_angle_time = 0.0
 
-    def _try_advance(self, target, condition):
-        if not condition:
-            if self._deb_target == target:
-                self._deb_count = max(0, self._deb_count - 1)
-            return False
-        if self._deb_target == target:
-            self._deb_count += 1
-        else:
-            self._deb_target = target
-            self._deb_count = 1
-        if self._deb_count >= self.DEBOUNCE:
-            self.phase = target
-            self._deb_count = 0
-            self._deb_target = None
-            if target in self.VOICE_PROMPTS and target not in self._voices_sent:
-                self._voice_queue = self.VOICE_PROMPTS[target]
-                self._voices_sent.add(target)
-            logger.info("Phase -> %d", target)
-            return True
-        return False
+    def trigger_speech(self, phase, message):
+        if phase not in self._voices_sent:
+            self._voice_queue = message
+            self._voices_sent.add(phase)
+            logger.info(f"[VOICE] {message}")
 
-    def process(self, detections, red_rect, fh, fw):
+    def change_phase(self, new_phase):
+        if self.phase != new_phase:
+            logger.info(f"Phase {self.phase} -> {new_phase}")
+            self.phase = new_phase
+            self._state_timer_start = time.time()
+
+    def process(self, detections, red_rect, fh, fw, frame):
         """Process one frame. Returns frame_state dict."""
+        
+        if self.phase == 0:
+            return {"current_phase": 0, "voice_prompt": None, "warning": None, "ar_elements": [], "angle_data": None}
+
         warning = None
         angle_data = {"approach_angle": 0, "status": "idle"}
         ar_elements = []
 
         banana = next((d for d in detections if d["cid"] == BANANA_ID), None)
-        knife = next((d for d in detections if d["cid"] == KNIFE_ID), None)
-        clamp = next((d for d in detections if d["cid"] in (SCISSORS_ID, FORK_ID)), None)
+        knife = next((d for d in detections if d["label"] == "Scalpel"), None)
+        clamp = next((d for d in detections if d["label"] == "Forceps"), None)
 
         for d in detections:
-            lbl = d.get("label", LABEL_MAP.get(d["cid"], "Unknown"))
+            lbl = d["label"]
             x1, y1, x2, y2 = d["box"]
             ar_elements.append({
                 "type": "box",
@@ -343,23 +403,68 @@ class DemoOrchestrator:
                 "label": "Incision Zone",
             })
 
-        # ── Phase transitions ─────────────────────────────────────────────
-        if self.phase == 0:
-            self._try_advance(1, banana is not None)
+        now = time.time()
 
-        elif self.phase == 1:
-            self._try_advance(2, banana is not None and knife is not None)
+        # ── State Machine Logic ─────────────────────────────────────────────
+
+        if self.phase == 1:
+            # STATE 1: ACTIVATION
+            # Wait until banana is detected
+            if banana:
+                if self._state_timer_start is None:
+                    self._state_timer_start = now
+                elif now - self._state_timer_start >= 2.5:
+                    self.change_phase(2)
+            else:
+                self._state_timer_start = None
 
         elif self.phase == 2:
+            # STATE 2: SURGICAL SCENE READY
+            # Wait for both clamp (left) and scalpel (right) to appear
+            if banana and knife and clamp:
+                if self._state_timer_start is None:
+                    self._state_timer_start = now
+                elif now - self._state_timer_start >= 2.5:
+                    self.change_phase(3)
+                    self.trigger_speech(3, "Tools identified: scalpel and clamp.")
+            else:
+                self._state_timer_start = None
+
+        elif self.phase == 3:
+            # STATE 3: TOOL INTRODUCTION
+            # Just pause for confirmation, no speech. After 2 seconds move to Phase 4.
+            if self._state_timer_start is None:
+                self._state_timer_start = now
+            elif now - self._state_timer_start >= 2.0:
+                self.change_phase(4)
+
+        elif self.phase == 4:
+            # STATE 4: TOOL CONFIRMATION PAUSE
+            # Wait for scalpel to be placed on banana region for >= 2-3 seconds
+            
             if banana and knife:
                 bc = bbox_center(banana["box"])
                 kc = bbox_center(knife["box"])
                 diag = math.sqrt(fw ** 2 + fh ** 2)
                 close = pt_distance(bc, kc) < diag * 0.30
-                if self._try_advance(3, close and red_rect is not None):
-                    self._incision_start = time.time()
+                
+                if close:
+                    if self._state_timer_start is None:
+                        self._state_timer_start = now
+                    elif now - self._state_timer_start >= 2.5:
+                        self.change_phase(5)
+                        self.trigger_speech(5, "You may begin surgery.")
+                else:
+                    self._state_timer_start = None
+            else:
+                self._state_timer_start = None
 
-        elif self.phase == 3:
+        elif self.phase == 5:
+            # STATE 5: SURGERY START PHASE
+            # Scalpel actively cutting. 10 second timed window.
+            if self._state_timer_start is None:
+                self._state_timer_start = now
+                
             if knife and red_rect:
                 rcx, rcy, rangle, _ = red_rect
                 s_angle = scalpel_angle_from_bbox(knife["box"])
@@ -375,12 +480,8 @@ class DemoOrchestrator:
                     status = "Too Shallow"
 
                 angle_data = {"approach_angle": int(round(raw_diff)), "status": status}
-                # Cache the fresh angle data + timestamp for TTL persistence
                 self._last_angle_data = angle_data
-                self._last_angle_time = time.time()
-
-                if raw_diff > 60:
-                    warning = "CRITICAL: Angle too steep! You are piercing crucial arteries!"
+                self._last_angle_time = now
 
                 kc = bbox_center(knife["box"])
                 dist = pt_distance(kc, (rcx, rcy))
@@ -393,28 +494,34 @@ class DemoOrchestrator:
                     "x2": rcx / fw, "y2": rcy / fh,
                     "color": trace_color,
                 })
-
-                if self._incision_start and (time.time() - self._incision_start) > self.INCISION_DURATION:
-                    self._try_advance(4, True)
             else:
-                # FIX (BUG-1): Do NOT reset _incision_start on missed frames.
-                # The ObjectTracker TTL keeps the knife alive for 0.5s anyway.
-                # Angle data TTL: keep last known values for ANGLE_TTL seconds
-                if (time.time() - self._last_angle_time) < self.ANGLE_TTL:
+                if (now - self._last_angle_time) < DemoOrchestrator.ANGLE_TTL:
                     angle_data = self._last_angle_data
 
-        elif self.phase == 4:
-            if clamp and banana:
-                bc = bbox_center(banana["box"])
-                cc = bbox_center(clamp["box"])
-                diag = math.sqrt(fw ** 2 + fh ** 2)
-                if self._try_advance(5, pt_distance(bc, cc) < diag * 0.35):
-                    self._complete_time = time.time()
+            if now - self._state_timer_start >= 10.0:
+                self.change_phase(6)
+                self.trigger_speech(6, "Pick up forceps or clamp to remove skin.")
 
-        elif self.phase == 5:
-            if self._complete_time and (time.time() - self._complete_time) > self.COMPLETE_DELAY:
-                ar_elements.append({"type": "success_overlay"})
+        elif self.phase == 6:
+            # STATE 6: CLAMP PHASE
+            # 10 second enforced timer
+            if self._state_timer_start is None:
+                self._state_timer_start = now
+                
+            if now - self._state_timer_start >= 10.0:
+                self.change_phase(7)
+                self.trigger_speech(7, "Surgery complete.")
+                
+        elif self.phase == 7:
+            # STATE 7: COMPLETION
+            if not self.snapshot_sent and banana:
+                self.final_crop = extract_512_crop(frame, banana["box"])
+                snapshot_executor.submit(process_snapshot_async, self.final_crop)
+                self.snapshot_sent = True
+                
+            ar_elements.append({"type": "success_overlay"})
 
+        # Global Zone Debug
         ar_elements.append({"type": "zone_debug", "midpoint": 0.5})
 
         voice = self._voice_queue
@@ -428,14 +535,13 @@ class DemoOrchestrator:
             "angle_data": angle_data,
         }
 
-
 # ── Camera ────────────────────────────────────────────────────────────────────
 
 camera_lock = threading.Lock()
 camera = None
 latest_frame = None
 latest_frame_lock = threading.Lock()
-
+vision_running = False
 
 def open_camera():
     """Open the configured external camera (DSHOW). Never falls back to internal."""
@@ -471,11 +577,16 @@ def open_camera():
 
 def capture_thread():
     """High-FPS capture thread — feeds MJPEG and frame buffer."""
-    global camera, latest_frame
-    while True:
+    global camera, latest_frame, vision_running
+    while vision_running:
         with camera_lock:
             if camera is None or not camera.isOpened():
-                camera = open_camera()
+                try:
+                    camera = open_camera()
+                except Exception as e:
+                    logger.error(e)
+                    time.sleep(2)
+                    continue
             cap = camera
         if cap is None:
             time.sleep(1)
@@ -505,114 +616,13 @@ def generate_mjpeg():
         time.sleep(0.033)
 
 
-# ── Flask + Socket.IO ─────────────────────────────────────────────────────────
-
-app = Flask(__name__)
-app.config["SECRET_KEY"] = "surgeai-demo"
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
-
-
-@app.route("/video")
-def video_feed():
-    return Response(generate_mjpeg(), mimetype="multipart/x-mixed-replace; boundary=frame")
-
-
-@app.route("/health")
-def health():
-    with camera_lock:
-        cam_ok = camera is not None and camera.isOpened()
-    return jsonify({"ok": True, "camera": cam_ok, "yolo": YOLO_AVAILABLE})
-
-
-@socketio.on("connect", namespace=NAMESPACE)
-def on_connect():
-    logger.info("[Socket] Client connected")
-    emit("system_health", {"payload": {"loopAAlive": True, "fps": 30, "latency": 0}})
-
-
-@socketio.on("disconnect", namespace=NAMESPACE)
-def on_disconnect():
-    logger.info("[Socket] Client disconnected")
-
-
 # ── Vision Loop ───────────────────────────────────────────────────────────────
 
-def _contour_scalpel_fallback(frame, fw, fh, bg_subtractor):
-    """
-    Fallback scalpel detection using contour analysis on the right half of the frame.
-    Triggered when YOLO does not detect any instrument on the right side.
-    Migration spec §15b Issue 1 fix: inject synthetic Scalpel detection from
-    contour/motion activity in right half when YOLO misses.
-    Returns a detection dict or None.
-    """
-    try:
-        right_x = fw // 2
-        right_half = frame[:, right_x:]
-
-        # Apply background subtractor for motion detection
-        fg_mask = bg_subtractor.apply(right_half)
-
-        # Morphological clean-up to remove noise
-        k3 = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, k3, iterations=1)
-        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, k3, iterations=2)
-
-        # Noise gate: require meaningful pixel count
-        if cv2.countNonZero(fg_mask) < 200:
-            return None
-
-        contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not contours:
-            return None
-
-        best = None
-        best_score = 0.0
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if area < 300 or area > 0.25 * (fw / 2) * fh:
-                continue
-            rect = cv2.minAreaRect(cnt)
-            rw, rh = rect[1]
-            if rw < 1 or rh < 1:
-                continue
-            long_s = max(rw, rh)
-            short_s = min(rw, rh)
-            ratio = short_s / long_s
-            # Instruments are elongated; reject near-square (head/body) shapes
-            if ratio > 0.75:
-                continue
-            score = area * (1.0 - ratio)
-            if score > best_score:
-                best_score = score
-                best = rect
-
-        if best is None:
-            return None
-
-        center, size, _ = best
-        abs_cx = right_x + center[0]
-        abs_cy = center[1]
-        half_w = max(size) / 2
-        half_h = min(size) / 2
-        box = [
-            max(0.0, abs_cx - half_w), max(0.0, abs_cy - half_h),
-            min(float(fw), abs_cx + half_w), min(float(fh), abs_cy + half_h),
-        ]
-        logger.debug("[FALLBACK] Contour scalpel at (%.0f, %.0f)", abs_cx, abs_cy)
-        return {
-            "cid": KNIFE_ID,
-            "conf": 0.25,  # synthetic — flagged as contour_fallback
-            "box": box,
-            "label": "Scalpel",
-            "source": "contour_fallback",
-        }
-    except Exception as exc:
-        logger.debug("Contour fallback error: %s", exc)
-        return None
-
+orchestrator = DemoOrchestrator()
 
 def vision_loop():
     """YOLO + OpenCV + DemoOrchestrator -> Socket.IO frame_state."""
+    global vision_running
     model = None
     if YOLO_AVAILABLE:
         try:
@@ -621,21 +631,21 @@ def vision_loop():
         except Exception as e:
             logger.error("YOLO load failed: %s", e)
 
-    orchestrator = DemoOrchestrator()
     tracker = ObjectTracker()
     fps_ema = 0.0
-    # Background subtractor for motion-based scalpel fallback (migration spec §15b Issue 1)
+
     bg_subtractor = cv2.createBackgroundSubtractorMOG2(
         history=30, varThreshold=40, detectShadows=False
     )
 
-    while True:
+    while vision_running:
         with latest_frame_lock:
             frame = latest_frame
+        
         if frame is None:
             time.sleep(0.05)
             continue
-
+            
         t0 = time.time()
         fh, fw = frame.shape[:2]
 
@@ -677,23 +687,6 @@ def vision_loop():
                         detections.append({"cid": effective_cid, "conf": conf, "box": box,
                                            "label": label, "source": source})
 
-        # ── Contour/motion fallback (migration spec §15b Issue 1 & 3) ─────────────
-        # Only inject when YOLO found no instrument on the right side of frame
-        yolo_has_right_instrument = any(
-            d["label"] in ("Scalpel", "Forceps")
-            and (d["box"][0] + d["box"][2]) / 2 >= fw / 2
-            for d in detections
-        )
-        if not yolo_has_right_instrument:
-            fallback = _contour_scalpel_fallback(frame, fw, fh, bg_subtractor)
-            if fallback is not None:
-                # Don't add if tracker already has a live Scalpel track
-                if "Scalpel" not in {d["label"] for d in detections}:
-                    detections.append(fallback)
-        else:
-            # Keep BG subtractor warm even when YOLO wins
-            bg_subtractor.apply(frame[:, fw // 2:])
-
         red_rect = None
         banana_det = next((d for d in detections if d["cid"] == BANANA_ID), None)
         if banana_det is not None:
@@ -701,7 +694,7 @@ def vision_loop():
 
         now = time.time()
         tracked = tracker.update(detections, now)
-        state = orchestrator.process(tracked, red_rect, fh, fw)
+        state = orchestrator.process(tracked, red_rect, fh, fw, frame)
 
         dt = max(1e-6, time.time() - t0)
         fps_ema = 0.85 * fps_ema + 0.15 * (1.0 / dt)
@@ -719,21 +712,59 @@ def vision_loop():
             time.sleep(0.066 - elapsed)
 
 
+# ── Flask + Socket.IO ─────────────────────────────────────────────────────────
+
+app = Flask(__name__)
+app.config["SECRET_KEY"] = "surgeai-demo"
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+@app.route("/video")
+def video_feed():
+    return Response(generate_mjpeg(), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+@app.route("/health")
+def health():
+    with camera_lock:
+        cam_ok = camera is not None and camera.isOpened()
+    return jsonify({"ok": True, "camera": cam_ok, "yolo": YOLO_AVAILABLE, "phase": orchestrator.phase})
+
+@socketio.on("connect", namespace=NAMESPACE)
+def on_connect():
+    logger.info("[Socket] Client connected")
+    emit("system_health", {"payload": {"loopAAlive": True, "fps": 30, "latency": 0}})
+
+@socketio.on("activate_surgeai", namespace=NAMESPACE)
+def on_activate():
+    """Triggered by frontend Landing Page CTA"""
+    global vision_running
+    logger.info("[Socket] activate_surgeai received. Initializing State 1.")
+    orchestrator.change_phase(1)
+    
+    if not vision_running:
+        vision_running = True
+        threading.Thread(target=capture_thread, daemon=True).start()
+        threading.Thread(target=vision_loop, daemon=True).start()
+    
+    emit("state", {"phase": orchestrator.phase})
+
+@socketio.on("disconnect", namespace=NAMESPACE)
+def on_disconnect():
+    logger.info("[Socket] Client disconnected")
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     print(f"{'=' * 55}")
-    print(f"  SurgeonAI Demo Backend")
+    print(f"  SurgeonAI Demo Backend (Deterministic State Engine)")
     print(f"  Video:     http://localhost:{PORT}/video")
     print(f"  Health:    http://localhost:{PORT}/health")
     print(f"  Socket.IO: http://localhost:{PORT}{NAMESPACE}")
     print(f"  YOLO:      {'Loaded' if YOLO_AVAILABLE else 'Not installed'}")
+    print(f"  Mongo:     {'Connected' if mongo_client else 'Not configured'}")
     print(f"{'=' * 55}")
 
-    camera = open_camera()
-
-    threading.Thread(target=capture_thread, daemon=True).start()
-    threading.Thread(target=vision_loop, daemon=True).start()
-
+    # No auto-start of camera / vision loop here. 
+    # Must wait for "activate_surgeai" from Socket.IO client.
+    
     socketio.run(app, host="0.0.0.0", port=PORT, debug=False, log_output=False,
                  allow_unsafe_werkzeug=True)

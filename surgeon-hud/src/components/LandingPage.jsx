@@ -462,42 +462,121 @@ export default function LandingPage({ onEnter }) {
                 </p>
               </motion.div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
                 {/* Pixel sprite sheet */}
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true }}
                   style={{
-                    borderRadius: 20, overflow: 'hidden',
-                    border: '1px solid rgba(255,255,255,0.06)',
-                    background: 'rgba(255,255,255,0.015)',
+                    borderRadius: 10, overflow: 'hidden',
+                    border: '1px solid rgba(45,212,191,0.22)',
+                    background: 'linear-gradient(180deg, rgba(9,14,26,0.92) 0%, rgba(6,10,20,0.95) 100%)',
                     padding: 0,
+                    boxShadow: '0 0 0 1px rgba(45,212,191,0.08) inset, 0 18px 38px rgba(0,0,0,0.45)',
                   }}
                 >
                   <img src="/assets/pixel_medical.png" alt="Medical pixel sprites" style={{ width: '100%', display: 'block' }} />
                 </motion.div>
 
-                {/* Features list */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20, justifyContent: 'center' }}>
+                {/* Pixel mission panel */}
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 14,
+                  justifyContent: 'center',
+                  borderRadius: 10,
+                  border: '1px solid rgba(45,212,191,0.2)',
+                  background: 'linear-gradient(180deg, rgba(9,14,26,0.9) 0%, rgba(7,11,21,0.96) 100%)',
+                  boxShadow: '0 0 0 1px rgba(45,212,191,0.08) inset',
+                  padding: '14px',
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'repeating-linear-gradient(180deg, rgba(45,212,191,0.04) 0, rgba(45,212,191,0.04) 1px, transparent 1px, transparent 8px)',
+                    pointerEvents: 'none',
+                  }} />
+                  <div style={{
+                    position: 'relative',
+                    zIndex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottom: '1px solid rgba(45,212,191,0.18)',
+                    paddingBottom: 10,
+                    marginBottom: 4,
+                  }}>
+                    <p style={{
+                      margin: 0,
+                      fontFamily: FONT_HEADING,
+                      fontSize: 14,
+                      letterSpacing: '0.14em',
+                      textTransform: 'uppercase',
+                      color: 'rgba(167,243,208,0.95)',
+                    }}>
+                      Mission Modules
+                    </p>
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: '0.2em',
+                      color: 'rgba(45,212,191,0.8)',
+                    }}>
+                      v1.0
+                    </span>
+                  </div>
                   {[
-                    { icon: '🎯', label: 'Real-Time Angle Tracking', desc: 'CV measures scalpel approach angle frame-by-frame against ideal 30–60° incision vector.' },
-                    { icon: '🗣️', label: 'AI Voice Coaching', desc: 'ElevenLabs TTS issues live verbal guidance — like a senior surgeon in your ear.' },
-                    { icon: '🔒', label: '6-Phase State Machine', desc: 'Rigid protocol enforces correct procedural sequence, not just technique.' },
-                    { icon: '📷', label: 'Zero Extra Hardware', desc: 'No AR headset. No haptic gloves. Just a camera, a scalpel, and SurgeonAI.' },
-                  ].map(({ icon, label, desc }, i) => (
+                    { glyph: '[AIM]', label: 'Real-Time Angle Tracking', desc: 'CV measures scalpel approach angle frame-by-frame against ideal 30–60° incision vector.', tone: '#f87171' },
+                    { glyph: '[VOX]', label: 'AI Voice Coaching', desc: 'ElevenLabs TTS issues live verbal guidance — like a senior surgeon in your ear.', tone: '#2dd4bf' },
+                    { glyph: '[SEQ]', label: '6-Phase State Machine', desc: 'Rigid protocol enforces correct procedural sequence, not just technique.', tone: '#a78bfa' },
+                    { glyph: '[CAM]', label: 'Zero Extra Hardware', desc: 'No AR headset. No haptic gloves. Just a camera, a scalpel, and SurgeonAI.', tone: '#67e8f9' },
+                  ].map(({ glyph, label, desc, tone }, i) => (
                     <motion.div
                       key={label}
                       initial={{ opacity: 0, x: -15 }}
                       whileInView={{ opacity: 1, x: 0 }}
                       viewport={{ once: true }}
                       transition={{ delay: i * 0.08 }}
-                      style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}
+                      style={{
+                        position: 'relative',
+                        zIndex: 1,
+                        display: 'grid',
+                        gridTemplateColumns: '82px 1fr',
+                        gap: 10,
+                        alignItems: 'start',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        background: 'rgba(4,8,16,0.78)',
+                        borderRadius: 8,
+                        padding: '10px 11px',
+                      }}
                     >
-                      <span style={{ fontSize: 20, flexShrink: 0, marginTop: 2 }}>{icon}</span>
+                      <span style={{
+                        fontFamily: FONT_BODY,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: '0.1em',
+                        color: tone,
+                        border: `1px solid ${tone}55`,
+                        background: `${tone}1A`,
+                        borderRadius: 6,
+                        padding: '5px 6px',
+                        textAlign: 'center',
+                        marginTop: 2,
+                      }}>{glyph}</span>
                       <div>
-                        <p style={{ fontFamily: FONT_HEADING, fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.8)', marginBottom: 4 }}>{label}</p>
-                        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', lineHeight: 1.65 }}>{desc}</p>
+                        <p style={{
+                          fontFamily: FONT_HEADING,
+                          fontSize: 14,
+                          fontWeight: 700,
+                          color: 'rgba(238,255,252,0.9)',
+                          marginBottom: 4,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.03em',
+                        }}>{label}</p>
+                        <p style={{ fontSize: 12, color: 'rgba(195,214,225,0.65)', lineHeight: 1.6 }}>{desc}</p>
                       </div>
                     </motion.div>
                   ))}
