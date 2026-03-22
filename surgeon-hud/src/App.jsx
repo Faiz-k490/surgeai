@@ -30,52 +30,55 @@ function ScanningDot() {
 }
 
 
-// ── Phase 3: Angle HUD ────────────────────────────────────────────────────
+// ── Angle HUD (Always Visible) ────────────────────────────────────────────
 function AngleHUD() {
-  const phase = useHudStore((s) => s.phase);
   const angleData = useHudStore((s) => s.angleData);
 
-  if (phase !== 3 || !angleData) return null;
-
-  const isOptimal = angleData.status === 'Optimal';
-  const glow = isOptimal ? '#22c55e' : '#ef4444';
+  const isIdle = !angleData || angleData.status === 'idle';
+  const isOptimal = !isIdle && angleData.status === 'Optimal';
+  const glow = isIdle ? '#ffffff' : isOptimal ? '#22c55e' : '#ef4444';
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
-      className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none"
+    <div
+      className="absolute bottom-5 right-5 z-20 pointer-events-none"
     >
       <div
         className="px-6 py-3 rounded-2xl border backdrop-blur-xl flex items-center gap-4"
         style={{
           backgroundColor: 'rgba(0,0,0,0.5)',
-          borderColor: `${glow}33`,
-          boxShadow: `0 0 30px ${glow}22`,
+          borderColor: isIdle ? 'rgba(255,255,255,0.1)' : `${glow}33`,
+          boxShadow: isIdle ? 'none' : `0 0 30px ${glow}22`,
         }}
       >
         <span className="text-[10px] font-mono tracking-[0.2em] text-white/40 uppercase">
           Approach
         </span>
-        <span
-          className="text-3xl font-mono font-bold tabular-nums"
-          style={{ color: glow, textShadow: `0 0 14px ${glow}88` }}
-        >
-          {angleData.approach_angle}°
-        </span>
-        <span
-          className="text-[10px] font-mono tracking-wider uppercase px-2 py-0.5 rounded-full border"
-          style={{
-            color: glow,
-            borderColor: `${glow}44`,
-            backgroundColor: `${glow}11`,
-          }}
-        >
-          {angleData.status}
-        </span>
+        {isIdle ? (
+          <span className="text-sm font-mono tracking-wider text-white/30">
+            Waiting for scalpel…
+          </span>
+        ) : (
+          <>
+            <span
+              className="text-3xl font-mono font-bold tabular-nums"
+              style={{ color: glow, textShadow: `0 0 14px ${glow}88` }}
+            >
+              {angleData.approach_angle}°
+            </span>
+            <span
+              className="text-[10px] font-mono tracking-wider uppercase px-2 py-0.5 rounded-full border"
+              style={{
+                color: glow,
+                borderColor: `${glow}44`,
+                backgroundColor: `${glow}11`,
+              }}
+            >
+              {angleData.status}
+            </span>
+          </>
+        )}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -219,10 +222,8 @@ function App() {
                 <SystemHealth />
               </div>
 
-              {/* Z-20: Angle HUD (Phase 3 only) */}
-              <AnimatePresence>
-                <AngleHUD />
-              </AnimatePresence>
+              {/* Z-20: Angle HUD (ALWAYS visible — shows idle state outside Phase 3) */}
+              <AngleHUD />
 
               {/* Z-30: Warning Banner */}
               <WarningBanner />
