@@ -138,6 +138,7 @@ async def stream_tts(
                     # Lower = lower latency; too low = less natural prosody.
                     "chunk_length_schedule": [50, 100, 150, 200],
                 },
+                "xi_api_key": api_key,
             }))
 
             async def _send_text() -> None:
@@ -159,6 +160,10 @@ async def stream_tts(
                         logger.info("Abort: halting audio playback")
                         return
                     msg = json.loads(raw)
+                    # Debug print the message if it's not simply an audio chunk
+                    if "audio" not in msg:
+                        logger.warning("ElevenLabs WS returned: %s", msg)
+                    
                     audio_b64 = msg.get("audio")
                     if audio_b64:
                         if first_chunk:
@@ -197,9 +202,34 @@ async def stream_tts(
 
 def speak(text: str) -> None:
     """
-    Blocking TTS — legacy entry point used by run_in_executor callers.
-    New code should call stream_tts() directly for real-time streaming.
+    Blocking TTS wrapper used by synchronous threads.
+    If ELEVENLABS_API_KEY is defined, it starts an ephemeral event loop to stream
+    the WebSocket audio. Otherwise, falls back to local pyttsx3.
     """
     if not text:
         return
-    _speak_pyttsx3_blocking(text)
+
+    api_key = os.environ.get("ELEVENLABS_API_KEY")
+    if not api_key:
+        try:
+            import pythoncom
+            pythoncom.CoInitialize()
+        except ImportError:
+            pass
+        _speak_pyttsx3_blocking(text)
+        return
+
+    async def _single_string_source() -> AsyncIterator[str]:
+        yield text
+
+    abort_event = asyncio.Event()
+    try:
+        asyncio.run(stream_tts(_single_string_source(), abort_event))
+    except Exception as exc:
+        logger.error("Failed to run ElevenLabs WS from blocking call (%s) — using pyttsx3", exc)
+        try:
+            import pythoncom
+            pythoncom.CoInitialize()
+        except ImportError:
+            pass
+        _speak_pyttsx3_blocking(text)

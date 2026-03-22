@@ -26,3 +26,9 @@ This log documents the major changes, fixes, and features added to `simulate_dem
 ## 5. Multiple Camera Configuration
 - **Feature:** Realized that developer setups often mount multiple cameras. Added a robust `--list-cameras` argument to scan indices `0-9` via OpenCV and print their availability.
 - **Feature:** Added a `--camera <idx>` argument to securely force the backend to bind to a specific internal/external webcam.
+
+## 6. ElevenLabs Conversational Audio Q&A
+- **Feature (Strict Medical Persona):** Extracted the generic conversational prompt in `intelligence_pipeline.py` and replaced it with a highly detailed, clinical mentor persona that forces the audio loop to treat the tracking UI ("banana", "red marker line") with absolute medical seriousness and rapid brevity.
+- **Bug Fix (Missing Audio):** Discovered that the synchronous Q&A loop in `loop_a_service` was hooked into the legacy `speak()` function, which completely bypassed ElevenLabs and defaulted to robotic `pyttsx3`. Rewrote `speak()` within `tts_pipeline.py` to gracefully spawn an ephemeral `asyncio` event loop so it can harness the high-performance WebSocket streaming pipeline inside synchronous threads.
+- **Bug Fix (Authentication 1008):** Fixed a silent authentication failure preventing ElevenLabs from returning the audio payload. Updated the WebSocket BOS (beginning of stream) message to properly inject the `xi_api_key` directly into the JSON.
+- **Development Tool:** Created the `test_elevenlabs.py` standalone sandbox to allow for isolated audio subsystem debugging without bleeding Gemini or Groq API quotas.
