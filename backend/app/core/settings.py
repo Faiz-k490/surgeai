@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
+PLACEHOLDER_ENV_VALUES = {"", "replace_me", "changeme", "your_key_here", "your_voice_id_here"}
 
 load_dotenv(BACKEND_ROOT / ".env")
 
@@ -46,6 +47,12 @@ class Settings:
 
 
 def load_settings() -> Settings:
+    def optional_env(name: str, default: str = "") -> str:
+        value = os.getenv(name, default).strip()
+        if value.lower() in PLACEHOLDER_ENV_VALUES:
+            return ""
+        return value
+
     yolo_model = os.getenv("YOLO_MODEL", "yolov8n.pt")
     yolo_path = Path(yolo_model)
     if not yolo_path.is_absolute():
@@ -71,12 +78,12 @@ def load_settings() -> Settings:
         track_ttl_seconds=float(os.getenv("TRACK_TTL_SECONDS", "0.65")),
         smoothing_alpha=float(os.getenv("TRACK_SMOOTHING_ALPHA", "0.72")),
         mongodb_uri=os.getenv("MONGODB_URI", "mongodb://localhost:27017"),
-        openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
+        openai_api_key=optional_env("OPENAI_API_KEY"),
         openai_vision_model=os.getenv("OPENAI_VISION_MODEL", "gpt-4-vision-preview").strip(),
-        elevenlabs_api_key=os.getenv("ELEVENLABS_API_KEY", "").strip(),
+        elevenlabs_api_key=optional_env("ELEVENLABS_API_KEY"),
         elevenlabs_stt_model=os.getenv("ELEVENLABS_STT_MODEL", "scribe_v1").strip(),
         elevenlabs_tts_model=os.getenv("ELEVENLABS_TTS_MODEL", "eleven_turbo_v2_5").strip(),
-        elevenlabs_tts_voice_id=os.getenv("ELEVENLABS_TTS_VOICE_ID", "").strip(),
+        elevenlabs_tts_voice_id=optional_env("ELEVENLABS_TTS_VOICE_ID"),
         vlm_cooldown_seconds=float(os.getenv("VLM_COOLDOWN_SECONDS", "2.5")),
         major_scene_cooldown_seconds=float(os.getenv("MAJOR_SCENE_COOLDOWN_SECONDS", "2.5")),
         response_dedupe_seconds=float(os.getenv("RESPONSE_DEDUPE_SECONDS", "8.0")),

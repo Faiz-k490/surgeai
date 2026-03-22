@@ -5,8 +5,8 @@ export const useHudStore = create((set) => ({
   isConnected: false,
   isBooted: false,
   activationRequested: false,
-  manualCaptureRequested: false,
   micPermission: 'prompt',
+  clientVoiceState: 'passive',
 
   // Backend-owned workflow state
   phase: 0,
@@ -44,9 +44,10 @@ export const useHudStore = create((set) => ({
   setBooted: (val) => set({ isBooted: val }),
   requestActivation: () => set({ activationRequested: true }),
   consumeActivationRequest: () => set({ activationRequested: false }),
-  requestManualCapture: () => set({ manualCaptureRequested: true }),
-  consumeManualCaptureRequest: () => set({ manualCaptureRequested: false }),
   setMicPermission: (status) => set({ micPermission: status }),
+  setClientVoiceState: (status) => set({ clientVoiceState: status }),
+  setListeningState: (status) => set({ listeningState: status }),
+  setTranscriptPreview: (text) => set({ transcriptPreview: text }),
   setPhase: (p) => set({ phase: p }),
   setVoicePrompt: (vp) => set({ voicePrompt: vp }),
   clearVoicePrompt: () => set({ voicePrompt: null }),

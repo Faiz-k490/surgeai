@@ -2,8 +2,7 @@ import { getApiBase, getSocketNamespace } from '../config';
 import { useHudStore } from '../store/useHudStore';
 
 /**
- * Socket.IO uses long-polling in dev (see SocketManager) — not a raw WebSocket.
- * Banner-only so the MJPEG `/video` feed stays visible for debugging (wrong port vs camera).
+ * Banner-only so the MJPEG `/video` feed stays visible while Socket.IO reconnects.
  */
 export default function ConnectionFallback() {
   const isConnected = useHudStore((state) => state.isConnected);
@@ -30,7 +29,7 @@ export default function ConnectionFallback() {
               <code className="text-gray-300">VITE_API_BASE</code> to <code className="text-gray-300">PORT</code>{' '}
               in               <code className="text-gray-300">backend/.env</code>. Socket namespace{' '}
               <code className="text-gray-300">{ns}</code> must match{' '}
-              <code className="text-gray-300">VITE_SOCKET_NAMESPACE</code>. Live video uses{' '}
+              <code className="text-gray-300">VITE_SOCKET_NAMESPACE</code>. The client will retry with websocket and polling. Live video uses{' '}
               <code className="text-gray-300">{base}/video</code> — if the feed is blank, the camera stream may
               be down or the API URL wrong.
             </p>

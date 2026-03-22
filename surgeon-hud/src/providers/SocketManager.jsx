@@ -9,32 +9,17 @@ function unwrap(data) {
   return data?.payload ?? data;
 }
 
-function chooseMimeType() {
-  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
-  return candidates.find((candidate) => window.MediaRecorder?.isTypeSupported?.(candidate)) || '';
+function getSpeechRecognitionCtor() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
 
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = String(reader.result || '');
-      const [, b64 = ''] = result.split(',');
-      resolve(b64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
-function computeLevel(analyser, dataArray) {
-  analyser.getByteTimeDomainData(dataArray);
-  let sum = 0;
-  for (let i = 0; i < dataArray.length; i += 1) {
-    const normalized = (dataArray[i] - 128) / 128;
-    sum += normalized * normalized;
-  }
-  return Math.sqrt(sum / dataArray.length);
+function speakFallback(text) {
+  if (!text || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 0.98;
+  utterance.pitch = 0.95;
+  window.speechSynthesis.speak(utterance);
 }
 
 export default function SocketManager({ children }) {
@@ -43,90 +28,275 @@ export default function SocketManager({ children }) {
   const applyFrameState = useHudStore((s) => s.applyFrameState);
   const activationRequested = useHudStore((s) => s.activationRequested);
   const consumeActivationRequest = useHudStore((s) => s.consumeActivationRequest);
-  const manualCaptureRequested = useHudStore((s) => s.manualCaptureRequested);
-  const consumeManualCaptureRequest = useHudStore((s) => s.consumeManualCaptureRequest);
   const setMicPermission = useHudStore((s) => s.setMicPermission);
+  const setListeningState = useHudStore((s) => s.setListeningState);
+  const setTranscriptPreview = useHudStore((s) => s.setTranscriptPreview);
+  const setClientVoiceState = useHudStore((s) => s.setClientVoiceState);
 
   const socketRef = useRef(null);
-  const streamRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const chunksRef = useRef([]);
-  const triggerKindRef = useRef('auto');
-  const recordingSinceRef = useRef(0);
-  const silenceSinceRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const analyserRef = useRef(null);
-  const levelArrayRef = useRef(null);
-  const levelIntervalRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const shouldRunRecognitionRef = useRef(false);
+  const recognitionRestartTimerRef = useRef(null);
+  const activeCommandRef = useRef(false);
+  const lastWakeAtRef = useRef(0);
+  const lastQueryAtRef = useRef(0);
   const playbackAudioRef = useRef(null);
   const lastPlayedVoiceIdRef = useRef(null);
-  const micPromiseRef = useRef(null);
+
+  const stopRecognition = useCallback(() => {
+    shouldRunRecognitionRef.current = false;
+    window.clearTimeout(recognitionRestartTimerRef.current);
+    try {
+      recognitionRef.current?.stop?.();
+    } catch {
+      // Browser speech APIs throw if stop() races with onend; ignore it.
+    }
+  }, []);
+
+  const startRecognition = useCallback(() => {
+    const SpeechRecognitionCtor = getSpeechRecognitionCtor();
+    if (!SpeechRecognitionCtor) {
+      setMicPermission('unsupported');
+      setClientVoiceState('unsupported');
+      return;
+    }
+
+    shouldRunRecognitionRef.current = true;
+    if (!recognitionRef.current) {
+      const recognition = new SpeechRecognitionCtor();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setMicPermission('granted');
+        if (!activeCommandRef.current) {
+          setClientVoiceState('passive');
+        }
+      };
+
+      recognition.onresult = (event) => {
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          const result = event.results[index];
+          const transcript = result[0]?.transcript?.trim() || '';
+          if (!transcript) continue;
+
+          const normalized = transcript.toLowerCase();
+          const wakeMatch = normalized.includes('hey surgeon');
+          const now = Date.now();
+
+          if (!activeCommandRef.current && wakeMatch) {
+            if ((now - lastWakeAtRef.current) < 2000) {
+              continue;
+            }
+
+            lastWakeAtRef.current = now;
+            activeCommandRef.current = true;
+            setClientVoiceState('wake');
+            setListeningState('wake');
+
+            const inlineCommand = transcript.replace(/hey surgeon[\s,:-]*/i, '').trim();
+            if (result.isFinal && inlineCommand) {
+              if ((now - lastQueryAtRef.current) < 2000) {
+                activeCommandRef.current = false;
+                setClientVoiceState('passive');
+                continue;
+              }
+              lastQueryAtRef.current = now;
+              activeCommandRef.current = false;
+              setTranscriptPreview(inlineCommand);
+              setClientVoiceState('thinking');
+              setListeningState('thinking');
+              socketRef.current?.emit('voice_text_query', {
+                text: inlineCommand,
+                trigger_kind: 'wake_inline',
+              });
+            }
+            continue;
+          }
+
+          if (!activeCommandRef.current) {
+            continue;
+          }
+
+          setTranscriptPreview(transcript);
+          setClientVoiceState(result.isFinal ? 'thinking' : 'listening');
+          setListeningState(result.isFinal ? 'thinking' : 'listening');
+
+          if (!result.isFinal) {
+            continue;
+          }
+
+          const cleanCommand = transcript.replace(/hey surgeon[\s,:-]*/i, '').trim();
+          if (!cleanCommand || (now - lastQueryAtRef.current) < 2000) {
+            activeCommandRef.current = false;
+            setClientVoiceState('passive');
+            setListeningState('idle');
+            continue;
+          }
+
+          lastQueryAtRef.current = now;
+          activeCommandRef.current = false;
+          socketRef.current?.emit('voice_text_query', {
+            text: cleanCommand,
+            trigger_kind: 'wake_followup',
+          });
+        }
+      };
+
+      recognition.onerror = (event) => {
+        const code = event?.error || 'unknown';
+        log.warn(`Speech recognition error: ${code}`);
+        if (code === 'not-allowed' || code === 'service-not-allowed') {
+          setMicPermission('denied');
+          setClientVoiceState('error');
+          shouldRunRecognitionRef.current = false;
+          return;
+        }
+        setClientVoiceState('restarting');
+      };
+
+      recognition.onend = () => {
+        if (!shouldRunRecognitionRef.current) return;
+        recognitionRestartTimerRef.current = window.setTimeout(() => {
+          try {
+            recognition.start();
+          } catch {
+            // A pending restart can collide with browser speech internals. Keep retrying.
+            recognitionRestartTimerRef.current = window.setTimeout(() => {
+              try {
+                recognition.start();
+              } catch {
+                // no-op
+              }
+            }, 1200);
+          }
+        }, 500);
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    try {
+      recognitionRef.current.start();
+    } catch {
+      // ignore duplicate start() while already active
+    }
+  }, [setClientVoiceState, setListeningState, setMicPermission, setTranscriptPreview]);
 
   useEffect(() => {
-    const socket = io(getSocketUrl(), {
-      path: '/socket.io',
-      transports: ['websocket', 'polling'],
-      upgrade: true,
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 500,
-    });
+    let cancelled = false;
 
-    socketRef.current = socket;
+    async function waitForBackendAndConnect() {
+      while (!cancelled && !socketRef.current) {
+        try {
+          const response = await fetch(`${getApiBase()}/health`, { cache: 'no-store' });
+          if (!response.ok) {
+            throw new Error(`Health returned ${response.status}`);
+          }
 
-    socket.on('connect', () => {
-      setIsConnected(true);
-      log.ok(`Socket.IO connected - ${getSocketUrl()}`);
-      if (useHudStore.getState().activationRequested) {
-        socket.emit('activate_surgeai');
-        useHudStore.getState().consumeActivationRequest();
-      }
-    });
+          const socket = io(getSocketUrl(), {
+            path: '/socket.io',
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 500,
+            timeout: 5000,
+          });
 
-    socket.on('disconnect', (reason) => {
-      setIsConnected(false);
-      log.warn(`Socket.IO disconnected - ${reason}`);
-    });
+          socketRef.current = socket;
 
-    socket.on('connect_error', (err) => {
-      log.bad(`Socket.IO connect_error: ${err?.message || err}`);
-    });
+          socket.on('connect', () => {
+            setIsConnected(true);
+            log.ok(`Socket.IO connected - ${getSocketUrl()}`);
+            if (useHudStore.getState().activationRequested) {
+              socket.emit('activate_surgeai');
+              useHudStore.getState().consumeActivationRequest();
+            }
+            startRecognition();
+          });
 
-    socket.on('frame_state', (raw) => {
-      applyFrameState(unwrap(raw));
-    });
+          socket.on('disconnect', (reason) => {
+            setIsConnected(false);
+            log.warn(`Socket.IO disconnected - ${reason}`);
+          });
 
-    socket.on('system_health', (raw) => {
-      setMetrics(unwrap(raw));
-    });
+          socket.on('connect_error', (err) => {
+            log.bad(`Socket.IO connect_error: ${err?.message || err}`);
+          });
 
-    socket.on('voice_tts_ready', async (raw) => {
-      const payload = unwrap(raw);
-      const rawAudioUrl = payload?.audio_url;
-      const voiceEventId = payload?.voice_event_id;
-      if (!rawAudioUrl || !voiceEventId || voiceEventId === lastPlayedVoiceIdRef.current) return;
-      const audioUrl = rawAudioUrl.startsWith('http') ? rawAudioUrl : `${getApiBase()}${rawAudioUrl}`;
+          socket.on('frame_state', (raw) => {
+            applyFrameState(unwrap(raw));
+          });
 
-      try {
-        if (playbackAudioRef.current) {
-          playbackAudioRef.current.pause();
+          socket.on('system_health', (raw) => {
+            setMetrics(unwrap(raw));
+          });
+
+          socket.on('voice_tts_ready', async (raw) => {
+            const payload = unwrap(raw);
+            const voiceEventId = payload?.voice_event_id;
+            const audioBase64 = payload?.audio_base64;
+            const rawAudioUrl = payload?.audio_url;
+            const voicePrompt = payload?.voice_prompt;
+            if (!voiceEventId || voiceEventId === lastPlayedVoiceIdRef.current) return;
+
+            stopRecognition();
+            setClientVoiceState('speaking');
+            lastPlayedVoiceIdRef.current = voiceEventId;
+
+            try {
+              if (playbackAudioRef.current) {
+                playbackAudioRef.current.pause();
+              }
+
+              const audioSrc = audioBase64
+                ? `data:audio/mpeg;base64,${audioBase64}`
+                : rawAudioUrl
+                  ? `${getApiBase()}${rawAudioUrl}`
+                  : null;
+
+              if (!audioSrc) {
+                throw new Error('No TTS audio payload returned');
+              }
+
+              const audio = new Audio(audioSrc);
+              playbackAudioRef.current = audio;
+              audio.onended = () => {
+                socket.emit('voice_playback_complete');
+                setClientVoiceState('passive');
+                startRecognition();
+              };
+              await audio.play();
+            } catch (error) {
+              log.warn(`Audio playback failed, using browser TTS fallback: ${error?.message || error}`);
+              speakFallback(voicePrompt);
+              socket.emit('voice_playback_complete');
+              setClientVoiceState('passive');
+              startRecognition();
+            }
+          });
+
+          return;
+        } catch {
+          await new Promise((resolve) => window.setTimeout(resolve, 1000));
         }
-        const audio = new Audio(audioUrl);
-        playbackAudioRef.current = audio;
-        lastPlayedVoiceIdRef.current = voiceEventId;
-        audio.onended = () => socket.emit('voice_playback_complete');
-        await audio.play();
-      } catch (error) {
-        log.warn(`Audio playback failed: ${error?.message || error}`);
-        socket.emit('voice_playback_complete');
       }
-    });
+    }
+
+    waitForBackendAndConnect();
 
     return () => {
+      cancelled = true;
+      stopRecognition();
+      if (playbackAudioRef.current) {
+        playbackAudioRef.current.pause();
+      }
+      window.speechSynthesis?.cancel?.();
+      socketRef.current?.disconnect?.();
       socketRef.current = null;
-      socket.disconnect();
     };
-  }, [setIsConnected, setMetrics, applyFrameState]);
+  }, [applyFrameState, setClientVoiceState, setIsConnected, setMetrics, startRecognition, stopRecognition]);
 
   useEffect(() => {
     const socket = socketRef.current;
@@ -135,170 +305,6 @@ export default function SocketManager({ children }) {
     socket.emit('activate_surgeai');
     consumeActivationRequest();
   }, [activationRequested, consumeActivationRequest]);
-
-  const startRecording = useCallback((triggerKind) => {
-    const socket = socketRef.current;
-    const stream = streamRef.current;
-    if (!socket?.connected || !stream) return;
-    if (mediaRecorderRef.current?.state === 'recording') return;
-
-    const mimeType = chooseMimeType();
-    const mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-    chunksRef.current = [];
-    triggerKindRef.current = triggerKind;
-    recordingSinceRef.current = Date.now();
-    silenceSinceRef.current = null;
-
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data?.size) {
-        chunksRef.current.push(event.data);
-        blobToBase64(event.data)
-          .then((audioBase64) => {
-            socket.emit('voice_audio_chunk', { audio_base64: audioBase64 });
-          })
-          .catch((error) => {
-            log.warn(`Voice chunk upload failed: ${error?.message || error}`);
-          });
-      }
-    };
-
-    mediaRecorder.onstop = async () => {
-      const chunkBlob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
-      chunksRef.current = [];
-      if (!chunkBlob.size) {
-        socket.emit('voice_cancel');
-        return;
-      }
-
-      try {
-        const audioBase64 = await blobToBase64(chunkBlob);
-        socket.emit('voice_turn_end', {
-          trigger_kind: triggerKindRef.current,
-          mime_type: chunkBlob.type || 'audio/webm',
-          audio_base64: audioBase64,
-        });
-      } catch (error) {
-        log.warn(`Voice upload failed: ${error?.message || error}`);
-        socket.emit('voice_cancel');
-      }
-    };
-
-    mediaRecorderRef.current = mediaRecorder;
-    socket.emit('voice_turn_start', { trigger_kind: triggerKind });
-    mediaRecorder.start(250);
-  }, []);
-
-  const stopRecording = useCallback(() => {
-    const recorder = mediaRecorderRef.current;
-    if (!recorder || recorder.state === 'inactive') return;
-    recorder.stop();
-  }, []);
-
-  const ensureMicrophone = useCallback(() => {
-    if (streamRef.current) return Promise.resolve(streamRef.current);
-    if (micPromiseRef.current) return micPromiseRef.current;
-    if (!navigator.mediaDevices?.getUserMedia) return Promise.resolve(null);
-
-    micPromiseRef.current = navigator.mediaDevices
-      .getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      })
-      .then((stream) => {
-        streamRef.current = stream;
-        setMicPermission('granted');
-        const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextCtor) return;
-
-        const audioContext = new AudioContextCtor();
-        const source = audioContext.createMediaStreamSource(stream);
-        const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 2048;
-        source.connect(analyser);
-
-        audioContextRef.current = audioContext;
-        analyserRef.current = analyser;
-        levelArrayRef.current = new Uint8Array(analyser.fftSize);
-
-        levelIntervalRef.current = window.setInterval(() => {
-          const analyserNode = analyserRef.current;
-          const levelArray = levelArrayRef.current;
-          const socket = socketRef.current;
-          const state = useHudStore.getState();
-          if (!analyserNode || !levelArray || !socket?.connected || !state.sessionId) return;
-          if (state.runtimeState === 'THINKING' || state.runtimeState === 'SPEAKING') return;
-          if (mediaRecorderRef.current?.state === 'recording' && triggerKindRef.current === 'manual') return;
-
-          const level = computeLevel(analyserNode, levelArray);
-          const now = Date.now();
-          const isRecording = mediaRecorderRef.current?.state === 'recording';
-
-          if (!isRecording) {
-            if (level > 0.065) {
-              startRecording('auto');
-              silenceSinceRef.current = null;
-            }
-            return;
-          }
-
-          if (level > 0.045) {
-            silenceSinceRef.current = null;
-            return;
-          }
-
-          silenceSinceRef.current = silenceSinceRef.current || now;
-          const spokenLongEnough = now - recordingSinceRef.current > 600;
-          const silentLongEnough = now - silenceSinceRef.current > 1200;
-          const maxTurnReached = now - recordingSinceRef.current > 9000;
-          if ((spokenLongEnough && silentLongEnough) || maxTurnReached) {
-            stopRecording();
-          }
-        }, 100);
-        micPromiseRef.current = null;
-        return stream;
-      })
-      .catch((error) => {
-        setMicPermission('denied');
-        log.warn(`Microphone unavailable: ${error?.message || error}`);
-        micPromiseRef.current = null;
-        return null;
-      });
-    return micPromiseRef.current;
-  }, [setMicPermission, startRecording, stopRecording]);
-
-  useEffect(() => {
-    if (!manualCaptureRequested) return;
-    const socket = socketRef.current;
-    if (!socket || !socket.connected) {
-      consumeManualCaptureRequest();
-      return;
-    }
-
-    ensureMicrophone().then(() => {
-      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
-        startRecording('manual');
-      }
-    });
-    consumeManualCaptureRequest();
-  }, [manualCaptureRequested, consumeManualCaptureRequest, ensureMicrophone, startRecording]);
-
-  useEffect(() => {
-    ensureMicrophone();
-    return () => {
-      window.clearInterval(levelIntervalRef.current);
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-      if (playbackAudioRef.current) {
-        playbackAudioRef.current.pause();
-      }
-      streamRef.current?.getTracks?.().forEach((track) => track.stop());
-      audioContextRef.current?.close?.();
-    };
-  }, [ensureMicrophone]);
 
   return <>{children}</>;
 }

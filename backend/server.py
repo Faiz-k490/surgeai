@@ -33,7 +33,13 @@ logger = logging.getLogger("surgeai.backend")
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "surgeai-demo"
-socketio = SocketIO(app, cors_allowed_origins=settings.frontend_origin, async_mode="threading")
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode="threading",
+    logger=True,
+    engineio_logger=True,
+)
 
 
 class RuntimeController:
@@ -161,6 +167,18 @@ class RuntimeController:
             payload = self.workflow.build_payload(self._context_snapshot(), self.snapshot_service, self._services_payload())
         self.broadcast_state(payload)
 
+    def handle_text_query(self, text: str, trigger_kind: str = "wake_phrase") -> None:
+        clean_text = (text or "").strip()
+        if not clean_text or not self.workflow.session_id:
+            return
+
+        with self.state_lock:
+            self.workflow.note_capture_started()
+            self.workflow.note_transcript(clean_text)
+            payload = self.workflow.build_payload(self._context_snapshot(), self.snapshot_service, self._services_payload())
+        self.broadcast_state(payload)
+        self._run_vlm_turn(user_transcript=clean_text, trigger_reason=trigger_kind)
+
     def mark_playback_complete(self) -> None:
         with self.state_lock:
             self.workflow.mark_playback_complete()
@@ -287,11 +305,18 @@ class RuntimeController:
             self._emit_tts_ready(audio_url, payload)
 
     def _emit_tts_ready(self, audio_url: str, payload: dict[str, Any]) -> None:
+        audio_base64 = None
+        if audio_url.startswith("/artifacts/audio/"):
+            file_name = audio_url.split("/artifacts/audio/", 1)[1]
+            audio_path = settings.backend_root / "artifacts" / "audio" / file_name
+            if audio_path.exists():
+                audio_base64 = base64.b64encode(audio_path.read_bytes()).decode("utf-8")
         socketio.emit(
             "voice_tts_ready",
             {
                 "payload": {
                     "audio_url": audio_url,
+                    "audio_base64": audio_base64,
                     "voice_prompt": payload.get("voice_prompt"),
                     "voice_event_id": payload.get("voice_event_id"),
                 }
@@ -558,6 +583,16 @@ def on_voice_turn_end(data):
         audio_b64=payload.get("audio_base64", ""),
         mime_type=payload.get("mime_type", "audio/webm"),
         trigger_kind=payload.get("trigger_kind", "auto"),
+    )
+
+
+@socketio.on("voice_text_query", namespace=settings.namespace)
+def on_voice_text_query(data):
+    payload = data or {}
+    socketio.start_background_task(
+        runtime.handle_text_query,
+        text=payload.get("text", ""),
+        trigger_kind=payload.get("trigger_kind", "wake_phrase"),
     )
 
 

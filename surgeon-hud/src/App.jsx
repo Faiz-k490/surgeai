@@ -195,8 +195,8 @@ function GuidanceRibbon() {
   const transcriptPreview = useHudStore((s) => s.transcriptPreview);
 
   return (
-    <div className="absolute left-0 right-0 bottom-8 z-20 flex justify-center px-4 pointer-events-none">
-      <div className="max-w-3xl rounded-2xl border border-white/10 bg-black/55 px-5 py-3 backdrop-blur-xl">
+    <div className="absolute left-0 right-0 bottom-28 z-20 flex justify-center px-4 pointer-events-none md:bottom-32">
+      <div className="w-full max-w-3xl rounded-2xl border border-white/10 bg-black/55 px-5 py-3 backdrop-blur-xl">
         <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-cyan-300/75">
           {surgicalStep.replaceAll('_', ' ')}
         </p>
