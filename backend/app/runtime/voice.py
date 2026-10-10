@@ -29,6 +29,11 @@ COMPLETION_PHRASES = (
     "all done",
     "all finished",
     "procedure complete",
+    "procedure is complete",
+    "the procedure is complete",
+    "session complete",
+    "session is complete",
+    "the session is complete",
 )
 
 
@@ -86,20 +91,19 @@ class VoiceRuntime:
         return True, remainder
 
     def is_completion_intent(self, transcript: str | None) -> bool:
-        normalized = self._normalize_text(transcript)
+        """Require an explicit completion statement for the whole session."""
+        if "?" in (transcript or ""):
+            return False
+        _, command = self.strip_wake_word(transcript or "")
+        normalized = self._normalize_text(command)
         if not normalized:
             return False
 
-        if any(phrase in normalized for phrase in COMPLETION_PHRASES):
-            return True
-
-        tokens = set(normalized.split())
-        if {"done", "finished"} & tokens:
-            if {"im", "i", "am", "all", "procedure", "session"} & tokens:
-                return True
-        if "complete" in tokens and {"procedure", "session", "im", "i"} & tokens:
-            return True
-        return False
+        # Match the whole utterance. A keyword bag also matches negations,
+        # questions, and partial tasks such as "I am done with setup".
+        normalized = re.sub(r"^(?:ok|okay|alright|yes)\s+", "", normalized)
+        normalized = re.sub(r"\s+(?:thanks|thank you)$", "", normalized)
+        return any(normalized in (phrase, f"{phrase} now") for phrase in COMPLETION_PHRASES)
 
     def _normalize_text(self, transcript: str | None) -> str:
         text = (transcript or "").lower()

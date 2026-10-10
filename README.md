@@ -58,6 +58,12 @@ Frontend: `surgeon-hud/.env`
 
 ## Endpoints
 
+Voice completion requires an explicit statement such as "I'm done" or "session complete".
+The wake phrase and short acknowledgments such as "Okay, I am done now, thanks" are accepted.
+Questions, negations, and partial-task statements such as "I am done with setup" do not end
+the session. Run the offline parser tests from the repository root with
+`PYTHONPATH=backend python -m unittest discover -s backend/tests -v`.
+
 | URL | Description |
 |-----|-------------|
 | `http://localhost:5000/video` | MJPEG live video stream |
